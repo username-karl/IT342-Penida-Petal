@@ -15,16 +15,18 @@ import com.petal.util.TokenManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.Calendar
 
 class DashboardActivity : AppCompatActivity() {
 
+    private lateinit var tvGreeting: TextView
     private lateinit var tvWelcomeName: TextView
     private lateinit var ivAvatar: ImageView
     private lateinit var ivPopular1: ImageView
     private lateinit var ivPopular2: ImageView
     private lateinit var bottomNav: BottomNavigationView
     private lateinit var btnLogout: Button
-    
+
     private lateinit var buyerContent: android.widget.LinearLayout
     private lateinit var floristContent: android.widget.LinearLayout
 
@@ -45,6 +47,12 @@ class DashboardActivity : AppCompatActivity() {
         buyerContent = findViewById(R.id.buyerContent)
         floristContent = findViewById(R.id.floristContent)
 
+        // Set dynamic greeting based on time
+        val greetingView = findViewById<TextView>(R.id.tvGreeting)
+        if (greetingView != null) {
+            greetingView.text = getTimeBasedGreeting()
+        }
+
         applyRoleUI(tokenManager.getRole())
 
         // Load placeholder image for avatar
@@ -58,7 +66,7 @@ class DashboardActivity : AppCompatActivity() {
             .load("https://images.unsplash.com/photo-1596627672288-757c91799e0c?q=80&w=400&auto=format&fit=crop")
             .centerCrop()
             .into(ivPopular1)
-            
+
         Glide.with(this)
             .load("https://images.unsplash.com/photo-1563241598-6ce3b266e744?q=80&w=400&auto=format&fit=crop")
             .centerCrop()
@@ -76,6 +84,15 @@ class DashboardActivity : AppCompatActivity() {
 
         btnLogout.setOnClickListener {
             performLogout()
+        }
+    }
+
+    private fun getTimeBasedGreeting(): String {
+        val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+        return when {
+            hour < 12 -> "Good morning,"
+            hour < 17 -> "Good afternoon,"
+            else -> "Good evening,"
         }
     }
 
@@ -100,20 +117,20 @@ class DashboardActivity : AppCompatActivity() {
                         val user = response.body()?.data
                         val firstName = user?.name?.split(" ")?.get(0) ?: "Customer"
                         tvWelcomeName.text = firstName
-                        
+
                         val role = user?.role
                         if (role != null) {
                             tokenManager.saveRole(role)
                             applyRoleUI(role)
                         }
                     } else {
-                        Toast.makeText(this@DashboardActivity, "Session expired.", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(this@DashboardActivity, "Session expired. Please login again.", Toast.LENGTH_SHORT).show()
                         forceLogoutLocally()
                     }
                 }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
-                    Toast.makeText(this@DashboardActivity, "Error fetching profile: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this@DashboardActivity, "Could not load profile. Check your connection.", Toast.LENGTH_SHORT).show()
                 }
             }
         }
