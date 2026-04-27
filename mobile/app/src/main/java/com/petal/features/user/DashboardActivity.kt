@@ -1,6 +1,7 @@
 package com.petal.features.user
 
 import android.content.Intent
+import com.petal.R
 import android.os.Bundle
 import android.widget.Button
 import android.widget.ImageView

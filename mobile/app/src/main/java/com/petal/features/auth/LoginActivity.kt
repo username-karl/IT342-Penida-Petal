@@ -1,6 +1,7 @@
 package com.petal.features.auth
 
 import android.content.Intent
+import com.petal.R
 import android.os.Bundle
 import android.util.Patterns
 import android.view.View

@@ -1,6 +1,7 @@
 package com.petal.features.auth
 
 import android.os.Bundle
+import com.petal.R
 import android.util.Patterns
 import android.view.View
 import android.widget.Button
