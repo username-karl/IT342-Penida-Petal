@@ -4,12 +4,7 @@ import { authAPI } from '../services/api';
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-    const [user, setUser] = useState({
-        name: "Developer",
-        email: "dev@petal.com",
-        role: "admin",
-        id: 1
-    });
+    const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {

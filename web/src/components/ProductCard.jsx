@@ -2,6 +2,16 @@ import React from 'react';
 import { Plus } from 'lucide-react';
 
 export default function ProductCard({ product }) {
+    // Format price if it's a number
+    const formattedPrice = typeof product.price === 'number' 
+        ? new Intl.NumberFormat('en-PH', { 
+            style: 'currency', 
+            currency: 'PHP',
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 0
+          }).format(product.price)
+        : product.price;
+
     return (
         <div className="group cursor-pointer">
             <div className="relative aspect-[4/5] overflow-hidden bg-stone-100 mb-4 rounded-sm">
@@ -22,14 +32,14 @@ export default function ProductCard({ product }) {
                 )}
             </div>
             <div className="flex justify-between items-start">
-                <div>
-                    <p className="text-[10px] uppercase tracking-wider text-stone-400 mb-1">{product.artisan}</p>
-                    <h3 className="text-lg font-serif font-medium text-stone-900 leading-none mb-1 group-hover:underline decoration-stone-300 underline-offset-4">
+                <div className="flex-1 mr-4">
+                    <p className="text-[10px] uppercase tracking-wider text-stone-400 mb-1">{product.artisan || 'Local Florist'}</p>
+                    <h3 className="text-lg font-serif font-medium text-stone-900 leading-tight mb-1 group-hover:underline decoration-stone-300 underline-offset-4">
                         {product.name}
                     </h3>
-                    <p className="text-xs text-stone-500">{product.subtitle}</p>
+                    <p className="text-xs text-stone-500 line-clamp-1">{product.subtitle}</p>
                 </div>
-                <span className="text-sm font-medium text-stone-900">{product.price}</span>
+                <span className="text-sm font-medium text-stone-900 whitespace-nowrap">{formattedPrice}</span>
             </div>
         </div>
     );

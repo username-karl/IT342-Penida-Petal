@@ -1,24 +1,33 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate, Link } from 'react-router-dom';
-import {
-    Menu, Search, ShoppingBag, ArrowRight, Star, Flower2,
+import { Menu, Search, ShoppingBag, ArrowRight, Star, Flower2,
     Package, Clock, Check, Plus, Mail, Instagram, Facebook,
-    Linkedin, X, LogOut, User, Settings, ChevronDown, Leaf, Store
+    Linkedin, X, LogOut, User, Settings, ChevronDown, Leaf, Store,
+    Heart, Sparkles, PartyPopper, Bird, Users, Gift, Flower
 } from 'lucide-react';
 import KpiCard from '../components/KpiCard';
 import ProductCard from '../components/ProductCard';
+import { productAPI } from '../services/api';
 
 export default function Dashboard() {
     const { user, logout } = useAuth();
     const navigate = useNavigate();
     const [showProfileMenu, setShowProfileMenu] = useState(false);
+    // Buyer Browsing States
+    const [products, setProducts] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [selectedMood, setSelectedMood] = useState(null);
     const [scrolled, setScrolled] = useState(false);
 
-    // Artisan Shop States
-    const [artisanTab, setArtisanTab] = useState('overview');
-    const [orderTab, setOrderTab] = useState('all');
-    const [productTab, setProductTab] = useState('live');
+    const moods = [
+        { id: 'ROMANCE', label: 'Romance', icon: Heart, emoji: '💖' },
+        { id: 'APOLOGY', label: 'Apology', icon: Sparkles, emoji: '🙏' },
+        { id: 'CELEBRATION', label: 'Celebration', icon: PartyPopper, emoji: '🎉' },
+        { id: 'SYMPATHY', label: 'Sympathy', icon: Flower, emoji: '🕊️' },
+        { id: 'FRIENDSHIP', label: 'Friendship', icon: Users, emoji: '💛' },
+        { id: 'JUST_BECAUSE', label: 'Just Because', icon: Gift, emoji: '🌸' },
+    ];
 
     // Scroll effect for header
     useEffect(() => {
@@ -29,24 +38,38 @@ export default function Dashboard() {
         return () => window.removeEventListener('scroll', handleScroll);
     }, []);
 
+    // Fetch products from backend
+    useEffect(() => {
+        const fetchProducts = async () => {
+            setLoading(true);
+            try {
+                const res = await productAPI.getAll(selectedMood);
+                setProducts(res.data.data || []);
+            } catch (err) {
+                console.error("Failed to fetch products:", err);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchProducts();
+    }, [selectedMood]);
+
     const isArtisan = user?.role === 'artisan' || user?.role === 'ARTISAN' || user?.role === 'ROLE_FLORIST';
     const displayName = user?.name || 'Guest';
-    const initials = displayName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+    const initials = (displayName || 'G')
+        .split(' ')
+        .filter(Boolean)
+        .map(n => n[0])
+        .join('')
+        .toUpperCase()
+        .slice(0, 2);
 
     const handleLogout = () => {
         logout();
         navigate('/login');
     };
 
-    // Mock Products Data (Flower House style)
-    const products = [
-        { id: 1, name: "Wild Pampas", subtitle: "Dried Reed Grass", price: "$45", artisan: "Atelier Vert", image: "/images/product_pampas_1771726515735.png", tag: "Bestseller" },
-        { id: 2, name: "Eucalyptus Cinerea", subtitle: "Preserved Foliage", price: "$28", artisan: "Maison Fleuri", image: "/images/product_eucalyptus_1771726530879.png" },
-        { id: 3, name: "Cotton Softness", subtitle: "Natural Cotton Stems", price: "$32", artisan: "Studio Petal", image: "/images/product_cotton_1771726545396.png" },
-        { id: 4, name: "Kanso Vase", subtitle: "Artisan Ceramic", price: "$55", artisan: "Ceramics by Jo", image: "/images/product_ceramic_vase_1771726567287.png" },
-        { id: 5, name: "The Aurora", subtitle: "Hydrangea & Immortelle", price: "$49", artisan: "L'Herbier", image: "/images/product_aurora_hydrangea_1771726583839.png" },
-        { id: 6, name: "Winter Wreath", subtitle: "Pine & Berries", price: "$65", artisan: "Forest & Co.", image: "/images/product_winter_wreath_1771726603408.png", tag: "Unique Piece" },
-    ];
 
     return (
         <div className="antialiased selection:bg-stone-200 selection:text-stone-900 bg-[#FDFCF8] min-h-screen">
@@ -203,37 +226,80 @@ export default function Dashboard() {
                 <section id="collection" className="max-w-7xl mx-auto px-6 py-24">
                     <div className="flex flex-col md:flex-row justify-between items-end mb-12 gap-6">
                         <div>
-                            <h2 className="text-3xl md:text-4xl font-serif text-stone-900 tracking-tight mb-2">Seasonal Selection</h2>
-                            <p className="text-stone-500 text-sm font-light">Autumn / Winter 2026</p>
+                            <h2 className="text-3xl md:text-4xl font-serif text-stone-900 tracking-tight mb-2">Discovery Collection</h2>
+                            <p className="text-stone-500 text-sm font-light">
+                                {selectedMood ? `Curated for ${selectedMood.replace('_', ' ').toLowerCase()}` : 'Artisan florist creations, ready to brighten your day.'}
+                            </p>
                         </div>
 
-                        <div className="flex gap-6 border-b border-stone-200 pb-2">
-                            <label className="custom-checkbox flex items-center gap-2 cursor-pointer group">
-                                <input type="checkbox" className="hidden" />
-                                <div className="w-4 h-4 border border-stone-300 rounded-sm flex items-center justify-center transition-colors group-hover:border-stone-500 bg-white">
-                                    <Check size={10} className="text-stone-900 hidden" strokeWidth={3} />
-                                </div>
-                                <span className="text-xs font-medium text-stone-600 uppercase tracking-wide">In Stock</span>
-                            </label>
-                            <label className="custom-checkbox flex items-center gap-2 cursor-pointer group">
-                                <input type="checkbox" className="hidden" defaultChecked />
-                                <div className="w-4 h-4 border border-stone-300 rounded-sm flex items-center justify-center transition-colors group-hover:border-stone-500 bg-white">
-                                    <Check size={10} className="text-stone-900 hidden" strokeWidth={3} />
-                                </div>
-                                <span className="text-xs font-medium text-stone-600 uppercase tracking-wide">New Arrivals</span>
-                            </label>
+                        {/* Mood Selector Chips */}
+                        <div className="flex bg-stone-100/50 p-1.5 rounded-full border border-stone-200 overflow-x-auto no-scrollbar max-w-full md:max-w-max">
+                            <button
+                                onClick={() => setSelectedMood(null)}
+                                className={`px-5 py-2 rounded-full text-xs font-medium transition-all whitespace-nowrap ${!selectedMood ? 'bg-white text-stone-900 shadow-sm ring-1 ring-stone-200' : 'text-stone-500 hover:text-stone-900'
+                                    }`}
+                            >
+                                All Pieces
+                            </button>
+                            {moods.map((mood) => {
+                                const Icon = mood.icon;
+                                return (
+                                    <button
+                                        key={mood.id}
+                                        onClick={() => setSelectedMood(mood.id)}
+                                        className={`flex items-center gap-2 px-5 py-2 rounded-full text-xs font-medium transition-all whitespace-nowrap ${selectedMood === mood.id ? 'bg-white text-stone-900 shadow-sm ring-1 ring-stone-200' : 'text-stone-500 hover:text-stone-900'
+                                            }`}
+                                    >
+                                        <Icon size={14} className={selectedMood === mood.id ? 'text-stone-900' : 'text-stone-400'} />
+                                        {mood.label}
+                                    </button>
+                                );
+                            })}
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-y-16 gap-x-8">
-                        {products.map((product) => (
-                            <ProductCard key={product.id} product={product} />
-                        ))}
-                    </div>
+                    {loading ? (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-y-16 gap-x-8 animate-pulse">
+                            {[...Array(6)].map((_, i) => (
+                                <div key={i} className="space-y-4">
+                                    <div className="aspect-[4/5] bg-stone-100 rounded-sm"></div>
+                                    <div className="h-4 bg-stone-100 w-1/2"></div>
+                                    <div className="h-3 bg-stone-100 w-3/4"></div>
+                                </div>
+                            ))}
+                        </div>
+                    ) : products.length > 0 ? (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-y-16 gap-x-8">
+                            {products.map((product) => (
+                                <ProductCard key={product.id} product={{
+                                    ...product,
+                                    image: product.imageUrl || 'https://images.unsplash.com/photo-1522673607200-164883eecd0c?q=80&w=800&auto=format&fit=crop',
+                                    artisan: product.floristName,
+                                    subtitle: product.description?.split('\n')[0] || 'Seasonal special'
+                                }} />
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="py-24 text-center">
+                            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-stone-50 border border-stone-100 text-stone-300 mb-6">
+                                <Flower2 size={32} strokeWidth={1} />
+                            </div>
+                            <h3 className="text-xl font-serif text-stone-900 mb-2">No pieces found</h3>
+                            <p className="text-stone-500 text-sm max-w-xs mx-auto mb-8 font-light">
+                                We couldn't find any products matching this mood. Try another selection or browse our full collection.
+                            </p>
+                            <button
+                                onClick={() => setSelectedMood(null)}
+                                className="text-sm font-medium text-stone-900 border-b border-stone-900 pb-1"
+                            >
+                                Show all pieces
+                            </button>
+                        </div>
+                    )}
 
                     <div className="mt-20 text-center">
                         <button className="inline-flex items-center gap-2 text-sm font-medium text-stone-500 hover:text-stone-900 transition-colors border-b border-stone-300 hover:border-stone-900 pb-1">
-                            View Full Collection
+                            Explore All Creations
                         </button>
                     </div>
                 </section>
