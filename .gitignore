@@ -30,3 +30,7 @@ logs/
 
 # OS
 Thumbs.db
+
+# Tooling
+.agents/
+.gemini/
