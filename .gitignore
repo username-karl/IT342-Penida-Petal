@@ -17,9 +17,10 @@ target/
 .env.test.local
 .env.production.local
 
-# IDE files
+# IDE and Tool files
 .idea/
 .vscode/
+.agents/
 *.swp
 *.iml
 .DS_Store
