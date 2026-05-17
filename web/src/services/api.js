@@ -40,4 +40,20 @@ export const authAPI = {
     getMe: () => api.get('/user/me'),
 };
 
+export const productsAPI = {
+    getProducts: (mood) => api.get('/products', { params: mood ? { mood } : {} }),
+    getProduct: (id) => api.get(`/products/${id}`),
+};
+
+export const cartAPI = {
+    getCart: () => api.get('/cart'),
+    addItem: ({ productId, quantity }) => api.post('/cart/items', { productId, quantity }),
+    updateItem: (id, quantity) => api.put(`/cart/items/${id}`, { quantity }),
+    removeItem: (id) => api.delete(`/cart/items/${id}`),
+};
+
+export const ordersAPI = {
+    createOrder: (data) => api.post('/orders', data),
+};
+
 export default api;

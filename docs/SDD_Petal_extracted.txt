@@ -1,0 +1,810 @@
+
+
+--- PAGE 1 ---
+IT342-[Section]
+System Integration and
+Architecture
+System Design Document (SDD)
+Project Title: [Insert Project Name]
+Prepared By: [Lastname, Firstname Middlename]
+Version: [e.g. 1.0]
+Date: [Current Date]
+Status: [Draft/Final]
+
+--- PAGE 2 ---
+REVISION HISTORY TABLE
+Version Date Author Changes Made Status
+0.1 2/21/2026 Karl Miguel C. Initial draft Draft
+Penida
+1 3/1/2026 Karl Miguel C. Final Draft Final
+Penida
+
+--- PAGE 3 ---
+TABLE OF CONTENTS
+Contents
+EXECUTIVE SUMMARY................................................................................. 4
+1.0 INTRODUCTION............................................................................... 5
+2.0 FUNCTIONAL REQUIREMENTS SPECIFICATION................................... 5
+3.0 NON-FUNCTIONAL REQUIREMENTS................................................... 8
+4.0 SYSTEM ARCHITECTURE................................................................... 9
+5.0 API CONTRACT & COMMUNICATION................................................ 10
+Authentication Endpoints....................................................................................... 11
+User Registration............................................................................................. 11
+User Login........................................................................................................ 11
+6.0 DATABASE DESIGN......................................................................... 13
+7.0 UI/UX DESIGN................................................................................ 14
+8.0 PLAN............................................................................................. 17
+
+--- PAGE 4 ---
+EXECUTIVE SUMMARY
+1.1 Project Overview
+Petal is a specialized e-commerce platform designed to modernize the floral gifting industry.
+Unlike generic marketplaces, Petal connects users with local artisan florists through a unique
+"Mood-Based" search engine and a "Forget-Me-Not" automation system. The system
+integrates a Spring Boot backend, a React web dashboard for florists, and an Android mobile
+application for customers, ensuring seamless order fulfillment and recurring delivery
+management.
+1.2 Objectives
+1. Develop a native Android application for customers to browse floral arrangements by
+"Mood" (e.g., Romance, Apology).
+2. Create a React-based web dashboard for florists to manage inventory and receive orders.
+3. Implement a "Forget-Me-Not" automation system that triggers recurring reminders for
+annual events (Anniversaries, Birthdays).
+4. Deploy a secure Spring Boot REST API to orchestrate communication between buyers,
+vendors, and the database.
+5. Integrate location-based services to ensure delivery accuracy within local zones.
+1.3 Scope
+Included Features:
+● User registration and authentication (Buyer & Florist roles).
+● Mood-based product catalog with real-time inventory filtering.
+● "Forget-Me-Not" calendar management for recurring events.
+● Checkout process with specific Delivery Date/Time Slot selection.
+● Florist Dashboard for order acceptance and status updates.
+● "Proof of Delivery" photo upload functionality.
+
+--- PAGE 5 ---
+● PostgreSQL database with relational schema for Users, Orders, and Products.
+Excluded Features:
+● International shipping (Local/Hyperlocal delivery only).
+● Wholesale/B2B bulk ordering system.
+● Real credit card processing.
+● Driver GPS tracking app.
+● Automated SMS service
+1.0 INTRODUCTION
+1.1 Purpose
+This document serves as the comprehensive design specification for the Petal application. It
+provides detailed requirements, architectural decisions, API contracts, database design, and
+implementation roadmap to guide development. It ensures that the emotional context of
+gifting (Moods) and the logistical precision of delivery (Time Slots) are technically supported
+across all system components.
+2.0 FUNCTIONAL REQUIREMENTS SPECIFICATION
+2.1 Project Overview
+Project Name: Petal
+Domain: On-Demand Delivery / Gifting
+Primary Users:
+1. Buyers (Customers / Senders)
+2. Florists (Vendors)
+Problem Statement: Users struggle to choose the "right" flowers for specific emotions and
+often forget important annual gifting dates.
+
+--- PAGE 6 ---
+Solution: A cross-platform system that filters products by emotion/mood and sends
+automated reminders for important dates, connecting buyers with local artisan florists.
+2.2 Core User Journeys
+Journey 1: The "Mood" Purchase
+User visits web application
+1. User visits the Petal app and selects the "I'm Sorry" mood tile.
+2. System displays arrangements tagged with the selected mood.
+3. User selects a bouquet and adds a personalized card message.
+4. User selects a Delivery Date and Time Slot.
+5. User completes checkout using Mock Payment; Order status becomes "PENDING".
+Journey 2: The "Forget-Me-Not" Reminder
+1. User navigates to "Important Dates" in their Profile.
+2. User adds "Wife's Birthday" (Feb 14) and toggles "Remind Me".
+3. System saves the date with is_recurring = true.
+4. Three days before the event, the User receives an email/app notification.
+Journey 3: Administrator Product Management
+1. Florist logs into the Florist Web Portal.
+2. Views new order in the "Pending" column of the Kanban board.
+3. Clicks "Accept" → Order moves to "Arranging".
+4. Once delivered, Florist clicks "Complete" → Status updates to "DELIVERED" on the Buyer's
+dashboard.
+2.3 Feature List (MoSCoW)
+MUST HAVE
+1. Two-Sided Authentication (Buyer & Florist Login/Register/Logout).
+2. Florist Storefront Setup (Store Logo, Location, Bio).
+
+--- PAGE 7 ---
+3. Mood-Based Product Catalog (Filter by Emotion tags).
+4. Delivery Scheduling (Date & Time Slot Picker).
+5. Florist Admin Panel (Kanban Order Board).
+6. Checkout with Mock Payment logic.
+SHOULD HAVE
+1. "Forget-Me-Not" automated reminders.
+2. Address Book for multiple recipients (Mom, Partner).
+COULD HAVE
+1. Profile Image Upload (Buyer Profile).
+2. Search bar for specific flower names.
+3. Interactive Map (Florist Location display).
+4. Florist Ratings & Reviews.
+WON'T HAVE
+1. Driver App / GPS Tracking.
+2. Real Credit Card Processing.
+3. Automated SMS Service.
+4. Video message attachments.
+5. Subscription boxes.
+2.4 Detailed Feature Specifications
+Feature: User Authentication & Role Selection
+● Screens: Splash, Login, Register, Role Selection Modal ("I am a Buyer" vs "I am a
+Florist").
+● Fields: Email, Password, Confirm Password, First Name, Last Name, Phone Number.
+● Validation: Email regex validation, password strength (minimum 8 characters with
+numbers/specials), preventing duplicate email registrations.
+● API Endpoints: POST /auth/register, POST /auth/login, POST /auth/logout.
+● Security: JWT tokens with ROLE_BUYER or ROLE_FLORIST authority; passwords
+hashed with bcrypt.
+
+--- PAGE 8 ---
+Feature: Florist Profile & Storefront Management
+● Screens: Store Settings (Web Admin), Public Florist Profile (Mobile Buyer App).
+● Fields: Store Name, Profile Picture/Logo Upload, Physical Address (Street, City, Zip),
+Store Bio/Description.
+● Validation: Image uploads must be PNG/JPG and under 5MB. Address fields cannot
+be empty.
+● API Endpoints: PUT /florists/profile, POST /florists/profile/image.
+● Security: Requires ROLE_FLORIST token. Buyers can only view profile data via public
+product queries.
+Feature: Shopping Cart
+● Screens: Cart View
+● Functions: Add product, remove product, update quantity
+● Persistence: Database storage per user
+● API Endpoints: GET /cart, POST /cart/items, PUT /cart/items/{id}, DELETE
+/cart/items/{id}
+Feature: Mood-Based Catalog & Search
+● Screens: Home Dashboard (Mood Grid), Product Results, Product Detail.
+● Display: Grid layout of Mood tiles (Romance, Apology, Celebration, Sympathy,
+Friendship, Just Because). Product cards display bouquet image, price, Florist logo,
+and Store Name.
+● Logic: Products tagged with multiple mood_tags. System filters results by selected
+tag and cross-references Florist zip code for local availability.
+● API Endpoints: GET /products, GET /products/{id}, GET /products?mood={mood}.
+● Security: Authenticated ROLE_BUYER.
+Feature: Delivery Scheduling & Checkout
+● Screens: Cart, Checkout (Step 1: Recipient Details, Step 2: Card Message, Step 3:
+Schedule & Pay).
+● Fields: Recipient Name, Recipient Address, Card Message (max 200 chars), Delivery
+Date, Time Slot (AM/PM).
+● Validation: Past dates are disabled. Dates where a Florist has reached maximum
+daily capacity are greyed out.
+● API Endpoints: GET /slots/availability?florist_id={id}&date={date}, POST /orders.
+● Security: Authenticated ROLE_BUYER.
+Feature 5: Florist Dashboard (Order Management)
+● Screens: Kanban Board (Columns: Pending, Arranging, Delivered), Product Inventory
+Manager.
+
+--- PAGE 9 ---
+● Functions: Dropdown to update order status. Toggle switches to mark bouquets as
+"Out of Stock".
+● API Endpoints: GET /orders/florist, PATCH /orders/{id}/status, PATCH
+/products/{id}/stock.
+● Security: Requires ROLE_FLORIST. A florist can only see and modify orders assigned to
+their florist_id.
+Feature 6: "Forget-Me-Not" Automation & Address Book
+● Screens: Important Dates Calendar, Address Book List, Add Contact Modal.
+● Fields: Event Label (e.g., "Mom's Birthday"), Event Date, is_recurring boolean.
+● Logic: A Spring Boot cron job runs daily at 00:00. It checks for saved dates exactly 3
+days away and triggers an email/app notification. The notified_year field prevents
+duplicate notifications per calendar year.
+● API Endpoints: POST /users/dates, GET /users/dates, POST /users/addresses.
+● Security: Authenticated ROLE_BUYER
+2.5 Acceptance Criteria
+AC-1: Florist Storefront Setup and Visibility
+● Given I am a newly registered user logged in as a Florist
+● When I upload my store logo and fill out my bio and address in the Store Settings page
+● Then the system should save my profile to the database
+● And Buyers browsing the mobile app should instantly see my logo and bio attached to
+my listed products.
+AC-2: Buyer Mood Search Accuracy
+Ø Given I am a Buyer on the home screen
+Ø When I tap the "Sympathy" mood tile
+Ø Then the system should display only products tagged with "sympathy" in the
+database
+Ø And I should not see "Romance" or "Celebration" products in the results list.
+AC-3: Delivery Scheduling Constraints
+Ø Given I am a Buyer navigating the checkout flow
+Ø When I open the Delivery Date calendar to schedule my order
+Ø Then all past dates must be disabled and unselectable
+
+--- PAGE 10 ---
+Ø And if a Florist has reached their daily maximum capacity, that specific date must be
+greyed out.
+AC-4: Two-Sided Order Status Sync
+Ø Given a Buyer has placed an order successfully
+Ø When the Florist moves the order to the "Delivered" column on their Web Dashboard
+Ø Then the order status in the database should immediately update to "DELIVERED"
+Ø And the Buyer should see this updated status reflected in their mobile app order
+history.
+AC-5: Forget-Me-Not Trigger Functionality
+Ø Given a Buyer has saved an "Anniversary" event set for February 14th
+Ø When the system's internal clock reaches February 11th (exactly 3 days prior)
+Ø Then the backend scheduler must trigger an automated reminder notification to the
+Buyer
+Ø And no duplicate notifications should be sent for that specific year.
+3.0 NON-FUNCTIONAL REQUIREMENTS
+3.1 Performance Requirements
+● API Response Time: GET /products must respond in ≤ 200ms to ensure smooth
+scrolling.
+● Concurrency: System must support 300% traffic load during peak holidays (Valentine's
+Day, Mother's Day).
+● Inventory Locking: Cart items must be reserved for 10 minutes to prevent
+double-booking.
+● Database queries must complete within 500ms under normal load.
+3.2 Security Requirements
+● HTTPS for all client-server communications.
+● JWT token authentication with role-based access control.
+● Data Encryption: Recipient address and card message data must be encrypted at rest
+(AES-256).
+
+--- PAGE 11 ---
+● PCI-DSS Compliance: No raw credit card data stored; tokenization via mock payment
+layer.
+● Privacy: Driver-visible recipient phone numbers must be masked.
+● Rate Limiting: 100 requests/minute per IP address.
+● Role-Based Access: Only ROLE_FLORIST users can access the inventory dashboard.
+3.3 Compatibility Requirements
+● Mobile: Android 7.0 (Nougat / API Level 24) and higher.
+● Web: Chrome, Firefox, Safari, Edge (latest 2 versions).
+● Screen Sizes: Mobile (360px+), Tablet (768px+), Desktop (1024px+).
+● Operating Systems: Windows 10+, macOS 10.15+, Linux Ubuntu 20.04+.
+3.4 Usability Requirements
+● One-Handed Navigation: Primary action buttons (Buy, Next, Confirm) placed in the
+bottom 30% of the mobile screen.
+● Visual Clarity: Product images must be high-resolution but WebP optimized (<200KB
+per image).
+● Error Recovery: Clear, actionable messages for failed states (e.g., "This florist is fully
+booked for this date. Please try tomorrow.").
+● Complete first purchase within 5 minutes for new users.
+● Touch targets minimum 44×44px on mobile.
+● WCAG 2.1 Level AA compliance for web interface.
+4.0 SYSTEM ARCHITECTURE
+4.1 Component Diagram
+Note: This should be a component diagram
+
+--- PAGE 12 ---
+Technology Stack:
+● Backend: Java 17, Spring Boot 3.x, Spring Security, Spring Data JPA
+● Database: PostgreSQL 14+
+● Web Frontend: React 18, TypeScript, Tailwind CSS, Axios
+● Mobile: Kotlin, Jetpack Compose, Retrofit, Room
+● Build Tools: Maven (Backend), npm/yarn (Web), Gradle (Android)
+● Deployment: Railway/Heroku (Backend), Vercel/Netlify (Web), APK (Mobile)
+5.0 API CONTRACT & COMMUNICATION
+5.1 API Standards
+Base URL https://api.petal.app/v1
+
+--- PAGE 13 ---
+Format JSON for all requests/responses
+Authentication Bearer token (JWT) in Authorization header
+Response Structure {
+"success": boolean,
+"data": object|null,
+"error": {
+"code": string,
+"message": string,
+"details": object|null
+},
+"timestamp": string
+}
+5.2 Endpoint Specifications
+Authentication Endpoints
+User Registration
+Description Register a new Buyer or Florist account
+API URL /auth/register
+HTTP Request Method POST
+Format JSON for all requests/responses
+Authentication None
+
+--- PAGE 14 ---
+Request Payload {
+"firstName": <firstName>,
+"lastName": <lastName>,
+"email": <email>,
+"password": <password>,
+"phone": <phone>,
+"role": <"BUYER"|"FLORIST">
+}
+Response Structure {
+"success": boolean,
+"data": {
+"userId": <uuid>,
+"email": <email>,
+"role": <role>,
+"message": "Registration successful."
+},
+"error": {
+"code": string,
+"message": string,
+"details": object|null
+},
+"timestamp": string
+}
+User Login
+Description User Login
+API URL /auth/login
+HTTP Method POST
+Format JSON for all requests/responses
+Authentication None
+
+--- PAGE 15 ---
+Request Payload {
+“email”: <email>,
+“password”: <password>,
+}
+Response Structure {
+"success": boolean,
+"data": {
+“user”: {
+“email”: <email>,
+“firstname”: <firstname>,
+“lastname”: <lastname>,
+“role”: <role>,
+},
+“accessToken”: <token>,
+“refreshToken”: <token>,
+},
+"error": {
+"code": string,
+"message": string,
+"details": object|null
+},
+"timestamp": string
+}
+
+--- PAGE 16 ---
+User Registration
+API URL /auth/logout
+HTTP Request Method POST
+Format JSON
+Authentication Bearer Token
+Request Payload None
+Response Structure { "success": true, "data": {
+"message": "Logged out
+successfully." }, "error": null,
+"timestamp": string }
+Product Endpoints
+Get Products (Mood Filter)
+Description Retrieve all products, with optional mood tag
+filter
+API URL /products?mood={mood}
+HTTP Request Method GET
+Format JSON
+Authentication Bearer Token (ROLE_BUYER)
+Query Parameters mood (optional): romance, apology,
+celebration, sympathy, friendship
+Response Structure { "success": boolean, "data": [ {
+"productId": <uuid>, "name":
+<string>, "price": <decimal>,
+"moodTags": [<string>],
+"imageUrl": <string>,
+
+--- PAGE 17 ---
+"floristId": <uuid>,
+"floristName": <string>,
+"inStock": <boolean> } ],
+"error": null, "timestamp":
+string }
+Get Product by ID
+Description Retrieve full details of a single product
+API URL /products/{id}
+HTTP Request Method GET
+Format JSON
+Authentication Bearer Token (ROLE_BUYER)
+Request Payload None
+Response Structure { "success": boolean, "data": {
+"productId": <uuid>, "name":
+<string>, "description":
+<string>, "price": <decimal>,
+"moodTags": [<string>],
+"imageUrl": <string>,
+"floristId": <uuid>,
+"floristName": <string>,
+"floristLogoUrl": <string>,
+"inStock": <boolean> }, "error":
+null, "timestamp": string }
+Create Product
+Description Create a new product listing (Florist only)
+
+--- PAGE 18 ---
+API URL /products
+HTTP Request Method POST
+Format JSON
+Authentication Bearer Token (ROLE_FLORIST)
+Request Payload { "name": <string>,
+"description": <string>, "price":
+<decimal>, "moodTags":
+[<string>], "imageUrl": <string>
+}
+Response Structure { "success": boolean, "data": {
+"productId": <uuid>, "message":
+"Product created successfully."
+}, "error": null, "timestamp":
+string }
+Update Product Stock
+Attribute Value
+Description Toggle product in-stock availability
+API URL /products/{id}/stock
+HTTP Request Method PATCH
+Format JSON
+Authentication Bearer Token (ROLE_FLORIST)
+Request Payload { "inStock": <boolean> }
+Response Structure { "success": boolean, "data": {
+"productId": <uuid>, "inStock":
+<boolean> }, "error": null,
+
+--- PAGE 19 ---
+"timestamp": string }
+Order Endpoints
+Place Order
+Feature Details
+Description Place a new floral delivery order
+API URL /orders
+HTTP Request Method POST
+Format JSON
+Authentication Bearer Token (ROLE_BUYER)
+Request Payload { "productId": <uuid>, "floristId": <uuid>,
+"recipientName": <string>, "recipientAddress":
+<string>, "cardMessage": <string>,
+"deliveryDate": <date>, "timeSlot":
+<"AM"|"PM"> }
+Response Structure { "success": boolean, "data": { "orderId":
+<uuid>, "status": "PENDING", "deliveryDate":
+<date>, "timeSlot": <string>, "message":
+"Order placed successfully." }, "error": null,
+"timestamp": string }
+Get Florist Orders
+Field Value
+Description Get all orders assigned to the authenticated
+florist
+API URL /orders/florist
+
+--- PAGE 20 ---
+HTTP Request Method GET
+Format JSON
+Authentication Bearer Token (ROLE_FLORIST)
+Request Payload None
+Response Structure { "success": boolean, "data": [ { "orderId":
+<uuid>, "productName": <string>,
+"recipientName": <string>, "deliveryDate":
+<date>, "timeSlot": <string>, "status": <string>
+} ], "error": null, "timestamp": string }
+Update Order Status
+Field Value
+Description Update the status of an order (Florist only)
+API URL /orders/{id}/status
+HTTP Request Method PATCH
+Format JSON
+Authentication Bearer Token (ROLE_FLORIST)
+Request Payload { "status":
+<"PENDING"|"ARRANGING"|"DELIVERED">
+}
+Response Structure { "success": boolean, "data": { "orderId":
+<uuid>, "status": <string> }, "error": null,
+"timestamp": string }
+Get Slot Availability
+Property Value
+
+--- PAGE 21 ---
+Description Check available delivery slots for a florist on a
+specific date
+API URL /slots/availability?florist_id={id}&date={date}
+HTTP Request Method GET
+Format JSON
+Authentication Bearer Token (ROLE_BUYER)
+Request Payload None
+Response Structure { "success": boolean, "data": { "date": <date>,
+"slots": { "AM": { "available": <boolean>,
+"remaining": <int> }, "PM": { "available":
+<boolean>, "remaining": <int> } } }, "error":
+null, "timestamp": string }
+Florist Profile Endpoints
+Update Florist Profile
+Field Value
+Description Update the florist's storefront details
+API URL /florists/profile
+HTTP Request Method PUT
+Format JSON
+Authentication Bearer Token (ROLE_FLORIST)
+Request Payload { "storeName": <string>, "bio":
+<string>, "street": <string>,
+"city": <string>, "zipCode":
+<string> }
+
+--- PAGE 22 ---
+Response Structure { "success": boolean, "data": {
+"message": "Profile updated
+successfully." }, "error": null,
+"timestamp": string }
+Upload Florist Logo
+Feature Detail
+Description Upload a store logo/profile image
+API URL /florists/profile/image
+HTTP Request Method POST
+Format multipart/form-data
+Authentication Bearer Token (ROLE_FLORIST)
+Request Payload file: <PNG or JPEG image data>
+Response Structure { "success": boolean, "data": { "imageUrl":
+<string> }, "error": null, "timestamp": string
+}
+Forget-Me-Not & Address Book Endpoints
+Save Important Date
+Attribute Value
+Description Save an important recurring date for reminder
+notifications
+API URL /users/dates
+HTTP Request Method POST
+
+--- PAGE 23 ---
+Format JSON
+Authentication Bearer Token (ROLE_BUYER)
+Request Payload { "label": <string>, "eventDate":
+<date>, "isRecurring": <boolean>
+}
+Response Structure { "success": boolean, "data": {
+"dateId": <uuid>, "message":
+"Date saved." }, "error": null,
+"timestamp": string }
+Get Saved Dates
+Attribute Value
+Description Retrieve all saved important dates for the
+authenticated buyer
+API URL /users/dates
+HTTP Request Method GET
+Format JSON
+Authentication Bearer Token (ROLE_BUYER)
+Request Payload None
+Response Structure { "success": boolean, "data": [ {
+"dateId": <uuid>, "label":
+<string>, "eventDate": <date>,
+"isRecurring": <boolean> } ],
+"error": null, "timestamp":
+string }
+
+--- PAGE 24 ---
+Save Address
+Attribute Value
+Description Save a recipient address to the buyer's
+address book
+API URL /users/addresses
+HTTP Request Method POST
+Format JSON
+Authentication Bearer Token (ROLE_BUYER)
+Request Payload { "label": <string>,
+"recipientName": <string>,
+"street": <string>, "city":
+<string>, "zipCode": <string>,
+"phone": <string> }
+Response Structure { "success": boolean, "data": {
+"addressId": <uuid>, "message":
+"Address saved." }, "error":
+null, "timestamp": string }
+5.3 Error Handling
+HTTP Status Codes
+● 200 OK – Successful request
+● 201 Created – Resource successfully created
+● 400 Bad Request – Invalid or missing input
+● 401 Unauthorized – Authentication required or failed
+● 403 Forbidden – Insufficient role permissions
+● 404 Not Found – Resource does not exist
+● 409 Conflict – Duplicate resource (e.g., email already registered)
+● 500 Internal Server Error – Unexpected server-side failure
+
+--- PAGE 25 ---
+Error Code Examples
+{
+Example 1 "success": false,
+"data": null,
+"error": {
+"code": "AUTH-001",
+"message": "Invalid credentials",
+"details": "Email or password is incorrect"
+},
+"timestamp": " 2026-02-14 T10:30:00Z"
+}
+
+--- PAGE 26 ---
+{
+Example 2 "success": false,
+"data": null,
+"error": {
+"code": "VALID-001",
+"message": "Validation failed",
+"details": {
+"email": "Email is required",
+"password": "Must be at least 8 characters"
+}
+},
+"timestamp": " 2026-02-14 T10:30:00Z"
+}
+Common Error Codes
+Code Description
+AUTH-001 Invalid credentials
+AUTH-002 Token expired
+AUTH-003 Insufficient permissions (wrong role)
+VALID-001 Validation failed
+DB-001 Resource not found
+DB-002 Duplicate entry (email already exists)
+BUSINESS-001 Florist daily slot capacity reached
+
+--- PAGE 27 ---
+BUSINESS-002 Product out of stock
+SYSTEM-001 Internal server error
+6.0 DATABASE DESIGN
+6.1 Entity Relationship Diagram
+Detailed Relationships:
+● One-to-One: User ↔ Florist (A florist account maps to exactly one user record)
+● One-to-Many: Florist → Products (A florist lists multiple products)
+● One-to-Many: User → Orders (A buyer places multiple orders)
+● One-to-Many: User → Saved_Dates (A buyer saves multiple important dates)
+● One-to-Many: User → Address_Book (A buyer saves multiple recipient addresses)
+
+--- PAGE 28 ---
+● Many-to-One: Orders → Products (An order references one product)
+● One-to-Many: Products → Product_Mood_Tags (A product has multiple mood tags)
+Key Tables:
+1. users – User accounts, authentication, and role assignment
+2. florists – Florist storefront details linked to a user account
+3. products – Product catalog managed by florists
+4. product_mood_tags – Mood tag associations for each product
+5. orders – Customer orders with delivery and status details
+6. saved_dates – Buyer's Forget-Me-Not important dates
+7. address_book – Buyer's saved recipient addresses
+Table Structure Summary:
+● users: user_id, first_name, last_name, email, password_hash, phone, role, created_at
+● florists: florist_id, user_id, store_name, bio, logo_url, street, city, zip_code,
+max_daily_capacity
+● products: product_id, florist_id, name, description, price, image_url, in_stock,
+created_at
+● product_mood_tags: tag_id, product_id, mood
+● orders: order_id, buyer_id, product_id, florist_id, recipient_name, recipient_address
+(encrypted), card_message (encrypted), delivery_date, time_slot, status,
+proof_image_url, created_at
+● saved_dates: date_id, user_id, label, event_date, is_recurring, notified_year
+● address_book: address_id, user_id, label, recipient_name, street, city, zip_code, phone
+7.0 UI/UX DESIGN
+7.1 Web Application Wireframes
+Note: This should be wireframes from Figma
+Screen 1: Splash & Onboarding Petal logo centered. Tagline: "Gift the feeling, not just the
+flower." Two CTA buttons: "I'm a Buyer" / "I'm a Florist"
+Screen 2: Login / Register Tab toggle between Login and Register. Fields: Email, Password.
+Register adds: First Name, Last Name, Phone. "Forgot Password?" link below login form.
+Screen 3: Home — Mood Grid Featured Florists horizontal scroll at top. 2×3 grid of Mood Tiles:
+Romance 🌹, Apology 💐, Celebration 🎉, Sympathy 🤍, Friendship 🌻, Just Because 🌸.
+Screen 4: Product Results Top filter bar showing active mood (e.g., "Romance"). Vertical scroll
+of Product Cards: bouquet image, florist logo, product name, price, store name.
+
+--- PAGE 29 ---
+Screen 5: Product Detail Large hero product image. Product name, price, florist name with
+logo, description. "Add to Cart" pinned to bottom.
+Screen 6: Checkout Step 1 — Recipient Details Recipient Name field. Recipient Address field
+with "Choose from Address Book" option. Progress bar: Step 1 of 3.
+Screen 7: Checkout Step 2 — Card Message Multiline text input (max 200 characters, live
+counter). Greeting card preview mock-up. Progress bar: Step 2 of 3.
+Screen 8: Checkout Step 3 — Schedule & Pay Date picker calendar (past dates and
+full-capacity dates greyed out). AM/PM time slot selector (greyed if unavailable). Order
+summary (product, total). "Confirm & Pay (Mock)" button. Progress bar: Step 3 of 3.
+Screen 9: Order Confirmation Animated checkmark. Order ID, Delivery Date, and Time Slot
+confirmation. "Track My Orders" button.
+Screen 10: Order History List of orders with status badges (Pending, Arranging, Delivered).
+Screen 11: Important Dates (Forget-Me-Not) Monthly calendar view with saved event
+markers. "Add Date" floating button → modal with Label, Date, Recurring toggle.
+Screen 12: Address Book List of saved recipient contacts with labels. Swipe-to-delete, "Add
+Contact" button.
+7.2 Web Application Wireframes (Florist Dashboard)
+Note: Insert Figma wireframe screenshots for each screen below
+Screen 1: Florist Login Centered login form. "Petal for Florists" branding.
+Screen 2: Store Settings Logo/image upload (drag-and-drop). Fields: Store Name, Bio, Street,
+City, ZIP. "Save Changes" button.
+Screen 3: Order Kanban Board Three columns: Pending | Arranging | Delivered. Order cards
+show: Order ID, Product, Recipient Name, Delivery Date, Time Slot. Dropdown on each card to
+update status.
+Screen 4: Product Inventory Manager Table: Image thumbnail, Name, Price, In-Stock toggle.
+"Add New Product" button → opens creation modal.
+Screen 5: Product Creation Modal Fields: Product Name, Description, Price, Mood Tags
+(multi-select chips), Image Upload.
+Design System
+
+--- PAGE 30 ---
+● Colors: Primary #E8849A (Blush Rose), Secondary #B5CBB7 (Sage Green), Background
+#FAF7F2 (Warm White), Success #10B981, Error #EF4444
+● Typography: Playfair Display (headings), Inter (body text), responsive sizing
+● Spacing: 8px grid system
+● Components: Consistent buttons, input fields, cards, modals, status badges
+● Responsive: Mobile-first approach; breakpoints at 640px, 768px, 1024px
+8.0 PLAN
+8.1 Project Timeline
+Phase 1: Planning & Design (Week 1–2)
+Week 1: Requirements & Architecture
+Day 1–2: Project setup, repository initialization, documentation scaffolding
+Day 3–4: Complete FRS and NFR sections
+Day 5–7: System architecture design and technology stack finalization
+Week 2: Detailed Design
+Day 1–2: API specification (all endpoints with request/response contracts)
+Day 3–4: Database design (ERD and table schemas)
+Day 5–6: UI/UX wireframes in Figma (Mobile + Web)
+Day 7: Implementation plan finalization and SDD review
+Phase 2: Backend Development (Week 3–4)
+Week 3: Foundation
+Day 1: Spring Boot project setup with all required dependencies
+Day 2: PostgreSQL configuration, entity classes, and JPA repositories
+Day 3: JWT authentication implementation (register, login, logout)
+Day 4: User management endpoints and role-based access control
+Day 5: Florist profile endpoints (PUT /florists/profile, image upload)
+Week 4: Core Features
+Day 1: Product CRUD endpoints with mood tag filtering
+Day 2: Order creation and slot availability endpoints
+Day 3: Forget-Me-Not cron job scheduler and email notification service
+Day 4: Error handling, input validation, and global exception handlers
+
+--- PAGE 31 ---
+Day 5: API testing in Postman and endpoint documentation
+Phase 3: Web Application (Week 5–6)
+Week 5: Florist Dashboard Foundation
+Day 1: React + TypeScript project setup with Tailwind CSS
+Day 2: Florist Login page and JWT integration
+Day 3: Store Settings page (profile and logo upload)
+Day 4: Product Inventory Manager (table, stock toggle, add product modal)
+Day 5: API service layer (Axios interceptors, token handling)
+Week 6: Kanban Order Board & Polish
+Day 1: Order Kanban Board with status dropdown
+Day 2: Real-time order status update integration
+Day 3: Responsive layout polish for all dashboard screens
+Day 4: Cross-browser compatibility testing
+Day 5: Full web-to-backend integration testing
+Phase 4: Mobile Application (Week 7–8)
+Week 7: Android Foundation
+Day 1: Android Studio setup, project structure, Retrofit configuration
+Day 2: Splash, Login, and Register screens with auth API integration
+Day 3: Home screen with Mood Grid and product results
+Day 4: Product Detail screen and checkout Step 1 (Recipient)
+Day 5: Checkout Step 2 (Card Message) and Step 3 (Schedule & Pay)
+Week 8: Complete Mobile App
+Day 1: Order confirmation screen and Order History
+Day 2: Forget-Me-Not calendar and Important Dates management
+Day 3: Address Book feature
+Day 4: UI polish, animations, and one-handed navigation refinement
+Day 5: Testing on emulator and physical device; APK generation
+Phase 5: Integration & Deployment (Week 9–10)
+Week 9: Integration Testing
+Day 1: End-to-end testing across all three platforms (Android, Web, API)
+Day 2: Bug fixes from integration testing
+
+--- PAGE 32 ---
+Day 3: Security review (JWT expiry, role enforcement, AES-256 check)
+Day 4: Performance testing (load simulation for peak holiday traffic)
+Day 5: Final SDD documentation updates
+Week 10: Deployment
+Day 1: Backend deployment (Railway/Heroku with environment variables)
+Day 2: Web app deployment (Netlify/Vercel)
+Day 3: Android APK distribution and final device testing
+Day 4: Full system smoke testing in production environment
+Day 5: Project submission and final defense preparation
+Milestones:
+● M1 (End Week 2): All SDD sections finalized, ERD and Figma wireframes complete
+● M2 (End Week 4): All REST endpoints functional and tested in Postman
+● M3 (End Week 6): Florist dashboard fully integrated with backend
+● M4 (End Week 8): Android app fully functional and tested on device
+● M5 (End Week 10): Full system deployed and integrated
+Critical Path:
+1. Authentication system (Week 3)
+2. Product catalog API (Week 3-4)
+3. Shopping cart functionality (Week 4)
+4. Checkout process (Week 6)
+5. Cross-platform testing (Week 9)
+Risk Mitigation:
+● Start with the simplest working version of each feature before adding complexity.
+● Test all integration points (API ↔ Web, API ↔ Android) early in each sprint.
+● Maintain a working backup branch in Git for each completed milestone.
+● Focus on Must Have features before attempting Should Have or Could Have items.
+● Use Postman collections to verify all API contracts before frontend integration.
+
+--- PAGE 33 ---

@@ -4,7 +4,13 @@ import ProtectedRoute from './components/ProtectedRoute';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
+import Browse from './pages/Browse';
+import Cart from './pages/Cart';
+import Checkout from './pages/Checkout';
+import CheckoutConfirmation from './pages/CheckoutConfirmation';
+import ProductDetail from './pages/ProductDetail';
 import Profile from './pages/Profile';
+import ShopByMood from './pages/ShopByMood';
 import SellerCentre from './pages/SellerCentre';
 import SellerEducation from './pages/SellerEducation';
 import './index.css';
@@ -29,6 +35,54 @@ export default function App() {
                         element={
                             <ProtectedRoute>
                                 <Profile />
+                            </ProtectedRoute>
+                        }
+                    />
+                    <Route
+                        path="/browse"
+                        element={
+                            <ProtectedRoute>
+                                <Browse />
+                            </ProtectedRoute>
+                        }
+                    />
+                    <Route
+                        path="/cart"
+                        element={
+                            <ProtectedRoute>
+                                <Cart />
+                            </ProtectedRoute>
+                        }
+                    />
+                    <Route
+                        path="/checkout"
+                        element={
+                            <ProtectedRoute>
+                                <Checkout />
+                            </ProtectedRoute>
+                        }
+                    />
+                    <Route
+                        path="/checkout/confirmation"
+                        element={
+                            <ProtectedRoute>
+                                <CheckoutConfirmation />
+                            </ProtectedRoute>
+                        }
+                    />
+                    <Route
+                        path="/products/:id"
+                        element={
+                            <ProtectedRoute>
+                                <ProductDetail />
+                            </ProtectedRoute>
+                        }
+                    />
+                    <Route
+                        path="/shop-by-mood"
+                        element={
+                            <ProtectedRoute>
+                                <ShopByMood />
                             </ProtectedRoute>
                         }
                     />
