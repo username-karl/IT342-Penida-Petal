@@ -43,6 +43,15 @@ export const authAPI = {
 export const productsAPI = {
     getProducts: (mood) => api.get('/products', { params: mood ? { mood } : {} }),
     getProduct: (id) => api.get(`/products/${id}`),
+    getSellerProducts: () => api.get('/seller/products'),
+    createProduct: (data) => api.post('/seller/products', data),
+    updateProduct: (id, data) => api.put(`/seller/products/${id}`, data),
+    deleteProduct: (id) => api.delete(`/seller/products/${id}`),
+};
+
+export const floristAPI = {
+    getProfile: () => api.get('/seller/florist'),
+    updateProfile: (data) => api.put('/seller/florist', data),
 };
 
 export const cartAPI = {
@@ -54,6 +63,8 @@ export const cartAPI = {
 
 export const ordersAPI = {
     createOrder: (data) => api.post('/orders', data),
+    getSellerOrders: () => api.get('/seller/orders'),
+    updateSellerOrderStatus: (id, status) => api.put(`/seller/orders/${id}/status`, { status }),
 };
 
 export default api;

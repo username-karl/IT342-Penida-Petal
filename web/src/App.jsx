@@ -13,6 +13,7 @@ import Profile from './pages/Profile';
 import ShopByMood from './pages/ShopByMood';
 import SellerCentre from './pages/SellerCentre';
 import SellerEducation from './pages/SellerEducation';
+import SellerOnboarding from './pages/SellerOnboarding';
 import './index.css';
 
 export default function App() {
@@ -99,6 +100,14 @@ export default function App() {
                         element={
                             <ProtectedRoute>
                                 <SellerCentre />
+                            </ProtectedRoute>
+                        }
+                    />
+                    <Route
+                        path="/seller-onboarding"
+                        element={
+                            <ProtectedRoute>
+                                <SellerOnboarding />
                             </ProtectedRoute>
                         }
                     />

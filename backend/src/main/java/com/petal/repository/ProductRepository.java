@@ -14,5 +14,7 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     @Query("select distinct p from Product p join p.moodTags tag where lower(tag) = lower(:mood)")
     List<Product> findByMood(@Param("mood") String mood);
 
+    List<Product> findByFloristIdOrderByIdDesc(Long floristId);
+
     boolean existsByName(String name);
 }

@@ -7,6 +7,7 @@ import com.petal.dto.RegisterRequest;
 import com.petal.entity.User;
 import com.petal.repository.UserRepository;
 import com.petal.security.JwtUtil;
+import com.petal.service.FloristService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -24,6 +25,7 @@ public class AuthController {
         private final UserRepository userRepository;
         private final PasswordEncoder passwordEncoder;
         private final JwtUtil jwtUtil;
+        private final FloristService floristService;
 
         @PostMapping("/register")
         public ResponseEntity<ApiResponse<Void>> register(@Valid @RequestBody RegisterRequest request) {
@@ -55,7 +57,11 @@ public class AuthController {
                                 .role(userRole)
                                 .build();
 
-                userRepository.save(user);
+                User savedUser = userRepository.save(user);
+
+                if ("ROLE_FLORIST".equals(userRole)) {
+                        floristService.createDefaultProfile(savedUser);
+                }
 
                 return ResponseEntity
                                 .status(HttpStatus.CREATED)

@@ -1,7 +1,10 @@
 package com.petal.service;
 
+import com.petal.dto.ProductRequest;
 import com.petal.dto.ProductResponse;
+import com.petal.entity.Florist;
 import com.petal.entity.Product;
+import com.petal.entity.User;
 import com.petal.repository.ProductRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -13,6 +16,7 @@ import java.util.List;
 public class ProductService {
 
     private final ProductRepository productRepository;
+    private final FloristService floristService;
 
     public List<ProductResponse> getProducts(String mood) {
         List<Product> products = mood == null || mood.isBlank()
@@ -30,7 +34,69 @@ public class ProductService {
                 .orElseThrow(() -> new IllegalArgumentException("Product not found"));
     }
 
-    private ProductResponse toResponse(Product product) {
+    public List<ProductResponse> getSellerProducts(User seller) {
+        requireFlorist(seller);
+
+        Florist florist = floristService.getOrCreateForUser(seller);
+
+        return productRepository.findByFloristIdOrderByIdDesc(florist.getId()).stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
+    public ProductResponse createSellerProduct(User seller, ProductRequest request) {
+        requireFlorist(seller);
+
+        Florist florist = floristService.getOrCreateForUser(seller);
+
+        Product product = Product.builder()
+                .name(request.getName().trim())
+                .description(request.getDescription().trim())
+                .price(request.getPrice())
+                .moodTags(normalizeMoodTags(request.getMoodTags()))
+                .imageUrl(request.getImageUrl().trim())
+                .floristId(florist.getId())
+                .floristName(resolveFloristName(florist, request.getFloristName()))
+                .floristLogoUrl(request.getFloristLogoUrl())
+                .inStock(request.isInStock())
+                .build();
+
+        return toResponse(productRepository.save(product));
+    }
+
+    public ProductResponse updateSellerProduct(User seller, Long productId, ProductRequest request) {
+        requireFlorist(seller);
+        Florist florist = floristService.getOrCreateForUser(seller);
+
+        Product product = productRepository.findById(productId)
+                .orElseThrow(() -> new IllegalArgumentException("Product not found"));
+        requireProductOwner(florist, product);
+
+        product.setName(request.getName().trim());
+        product.setDescription(request.getDescription().trim());
+        product.setPrice(request.getPrice());
+        product.getMoodTags().clear();
+        product.getMoodTags().addAll(normalizeMoodTags(request.getMoodTags()));
+        product.setImageUrl(request.getImageUrl().trim());
+        product.setFloristName(resolveFloristName(florist, request.getFloristName()));
+        product.setFloristLogoUrl(request.getFloristLogoUrl());
+        product.setInStock(request.isInStock());
+
+        return toResponse(productRepository.save(product));
+    }
+
+    public void deleteSellerProduct(User seller, Long productId) {
+        requireFlorist(seller);
+        Florist florist = floristService.getOrCreateForUser(seller);
+
+        Product product = productRepository.findById(productId)
+                .orElseThrow(() -> new IllegalArgumentException("Product not found"));
+        requireProductOwner(florist, product);
+
+        productRepository.delete(product);
+    }
+
+    public ProductResponse toResponse(Product product) {
         return ProductResponse.builder()
                 .id(product.getId())
                 .name(product.getName())
@@ -43,5 +109,35 @@ public class ProductService {
                 .floristLogoUrl(product.getFloristLogoUrl())
                 .inStock(product.isInStock())
                 .build();
+    }
+
+    private void requireFlorist(User user) {
+        if (user == null || !"ROLE_FLORIST".equals(user.getRole())) {
+            throw new IllegalArgumentException("Florist access is required");
+        }
+    }
+
+    private void requireProductOwner(Florist florist, Product product) {
+        if (!florist.getId().equals(product.getFloristId())) {
+            throw new IllegalArgumentException("You can only manage your own products");
+        }
+    }
+
+    private List<String> normalizeMoodTags(List<String> moodTags) {
+        return moodTags.stream()
+                .filter(tag -> tag != null && !tag.isBlank())
+                .map(tag -> tag.trim().toLowerCase())
+                .distinct()
+                .toList();
+    }
+
+    private String resolveFloristName(Florist florist, String requestedName) {
+        if (requestedName != null && !requestedName.isBlank()) {
+            return requestedName.trim();
+        }
+        if (florist.getStoreName() != null && !florist.getStoreName().isBlank()) {
+            return florist.getStoreName();
+        }
+        return "Local Petal Florist";
     }
 }

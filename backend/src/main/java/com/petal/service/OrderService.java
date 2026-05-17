@@ -2,7 +2,11 @@ package com.petal.service;
 
 import com.petal.dto.CreateOrderRequest;
 import com.petal.dto.OrderResponse;
+import com.petal.dto.SellerOrderItemResponse;
+import com.petal.dto.SellerOrderResponse;
+import com.petal.dto.SellerOrderStatusRequest;
 import com.petal.entity.CartItem;
+import com.petal.entity.Florist;
 import com.petal.entity.Order;
 import com.petal.entity.OrderItem;
 import com.petal.entity.Product;
@@ -14,7 +18,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -22,6 +28,13 @@ public class OrderService {
 
     private final CartItemRepository cartItemRepository;
     private final OrderRepository orderRepository;
+    private final FloristService floristService;
+    private static final Set<String> SELLER_STATUSES = Set.of(
+            "PENDING",
+            "PREPARING",
+            "READY_FOR_PICKUP",
+            "COMPLETED",
+            "CANCELLED");
 
     @Transactional
     public OrderResponse createOrder(User user, CreateOrderRequest request) {
@@ -68,5 +81,87 @@ public class OrderService {
                 .totalAmount(savedOrder.getTotalAmount())
                 .message("Order placed successfully.")
                 .build();
+    }
+
+    @Transactional(readOnly = true)
+    public List<SellerOrderResponse> getSellerOrders(User seller) {
+        Florist florist = floristService.getOrCreateForUser(seller);
+        return orderRepository.findDistinctByItemsProductFloristIdOrderByDeliveryDateAscIdAsc(florist.getId())
+                .stream()
+                .map(order -> toSellerOrderResponse(order, florist.getId()))
+                .toList();
+    }
+
+    @Transactional
+    public SellerOrderResponse updateSellerOrderStatus(
+            User seller,
+            Long orderId,
+            SellerOrderStatusRequest request) {
+        Florist florist = floristService.getOrCreateForUser(seller);
+        String status = normalizeStatus(request.getStatus());
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new IllegalArgumentException("Order not found for this seller"));
+
+        if (!hasSellerItems(order, florist.getId())) {
+            throw new IllegalArgumentException("Order not found for this seller");
+        }
+
+        order.setStatus(status);
+        Order savedOrder = orderRepository.save(order);
+        return toSellerOrderResponse(savedOrder, florist.getId());
+    }
+
+    private SellerOrderResponse toSellerOrderResponse(Order order, Long floristId) {
+        List<SellerOrderItemResponse> items = order.getItems().stream()
+                .filter(item -> floristId.equals(item.getProduct().getFloristId()))
+                .sorted(Comparator.comparing(OrderItem::getId, Comparator.nullsLast(Long::compareTo)))
+                .map(this::toSellerOrderItemResponse)
+                .toList();
+
+        BigDecimal subtotal = items.stream()
+                .map(SellerOrderItemResponse::getLineTotal)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        return SellerOrderResponse.builder()
+                .id(order.getId())
+                .orderNumber("PET-" + String.format("%04d", order.getId()))
+                .buyerName(order.getUser().getName())
+                .recipientName(order.getRecipientName())
+                .recipientAddress(order.getRecipientAddress())
+                .cardMessage(order.getCardMessage())
+                .deliveryDate(order.getDeliveryDate())
+                .timeSlot(order.getTimeSlot())
+                .status(order.getStatus())
+                .sellerSubtotal(subtotal)
+                .itemSummary(items.stream()
+                        .map(item -> item.getProductName() + " x" + item.getQuantity())
+                        .reduce((first, second) -> first + ", " + second)
+                        .orElse("No seller items"))
+                .items(items)
+                .build();
+    }
+
+    private SellerOrderItemResponse toSellerOrderItemResponse(OrderItem item) {
+        BigDecimal lineTotal = item.getUnitPrice().multiply(BigDecimal.valueOf(item.getQuantity()));
+        return SellerOrderItemResponse.builder()
+                .productId(item.getProduct().getId())
+                .productName(item.getProductName())
+                .quantity(item.getQuantity())
+                .unitPrice(item.getUnitPrice())
+                .lineTotal(lineTotal)
+                .build();
+    }
+
+    private boolean hasSellerItems(Order order, Long floristId) {
+        return order.getItems().stream()
+                .anyMatch(item -> floristId.equals(item.getProduct().getFloristId()));
+    }
+
+    private String normalizeStatus(String status) {
+        String normalized = status == null ? "" : status.trim().toUpperCase();
+        if (!SELLER_STATUSES.contains(normalized)) {
+            throw new IllegalArgumentException("Unsupported order status");
+        }
+        return normalized;
     }
 }
