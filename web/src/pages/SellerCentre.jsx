@@ -548,7 +548,7 @@ export default function SellerCentre() {
                                         </div>
                                         <div className="divide-y divide-stone-100">
                                             {orders.slice(0, 4).map((order) => (
-                                                <button key={order.id} onClick={() => setActiveTab('orders')} className="w-full p-5 text-left hover:bg-stone-50 transition-colors grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3">
+                                                <Link key={order.id} to={`/seller-orders/${order.id}`} className="w-full p-5 text-left hover:bg-stone-50 transition-colors grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3">
                                                     <div>
                                                         <p className="text-xs uppercase tracking-[0.18em] text-stone-400">{order.orderNumber}</p>
                                                         <p className="mt-2 font-medium text-stone-950">{order.itemSummary}</p>
@@ -558,7 +558,7 @@ export default function SellerCentre() {
                                                         <span className={`inline-flex border px-2.5 py-1 text-xs font-medium ${statusClass(order.status)}`}>{statusLabel(order.status)}</span>
                                                         <p className="mt-2 font-semibold">{currency(order.sellerSubtotal)}</p>
                                                     </div>
-                                                </button>
+                                                </Link>
                                             ))}
                                             {!orders.length && (
                                                 <div className="p-5 text-sm text-stone-500">
@@ -626,6 +626,7 @@ export default function SellerCentre() {
                                                     <td className="px-5 py-4 font-semibold">{currency(order.sellerSubtotal)}</td>
                                                     <td className="px-5 py-4"><span className={`inline-flex border px-2.5 py-1 text-xs font-medium ${statusClass(order.status)}`}>{statusLabel(order.status)}</span></td>
                                                     <td className="px-5 py-4 text-right">
+                                                        <Link to={`/seller-orders/${order.id}`} className="mr-3 text-sm font-medium text-stone-700 hover:text-stone-950">View</Link>
                                                         {nextStatus(order.status) ? (
                                                             <button
                                                                 onClick={() => updateOrderStatus(order, nextStatus(order.status))}

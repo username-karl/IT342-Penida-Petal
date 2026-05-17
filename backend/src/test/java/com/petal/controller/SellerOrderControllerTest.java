@@ -102,6 +102,34 @@ class SellerOrderControllerTest {
                 .andExpect(jsonPath("$.data.status", is("PREPARING")));
     }
 
+    @Test
+    void getSellerOrderReturnsSellerOwnedOrderDetail() throws Exception {
+        User seller = authenticatedSeller();
+        Mockito.when(orderService.getSellerOrder(seller, 12L)).thenReturn(
+                SellerOrderResponse.builder()
+                        .id(12L)
+                        .orderNumber("PET-0012")
+                        .buyerName("Mikaela Santos")
+                        .recipientName("Lara Santos")
+                        .recipientAddress("Cebu Business Park")
+                        .deliveryDate(LocalDate.of(2026, 5, 18))
+                        .timeSlot("AM")
+                        .status("PENDING")
+                        .paymentMethod("GCASH")
+                        .sellerSubtotal(new BigDecimal("2950.00"))
+                        .itemSummary("Aurora Hydrangea x2")
+                        .build());
+
+        mockMvc.perform(get("/api/seller/orders/12")
+                        .principal(SecurityContextHolder.getContext().getAuthentication()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.data.orderNumber", is("PET-0012")))
+                .andExpect(jsonPath("$.data.buyerName", is("Mikaela Santos")))
+                .andExpect(jsonPath("$.data.paymentMethod", is("GCASH")))
+                .andExpect(jsonPath("$.data.recipientAddress", is("Cebu Business Park")));
+    }
+
     private User authenticatedSeller() {
         User user = User.builder()
                 .id(4L)

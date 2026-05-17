@@ -246,7 +246,7 @@ export default function Profile() {
                                 ) : orders.length ? (
                                     <div className="space-y-4">
                                         {orders.map((order) => (
-                                            <article key={order.id} className="border border-stone-200 bg-white p-4 sm:p-5 hover:border-stone-300 transition-colors">
+                                            <Link to={`/orders/${order.id}`} key={order.id} className="block border border-stone-200 bg-white p-4 sm:p-5 hover:border-stone-300 transition-colors">
                                                 <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                                                     <div className="flex gap-4 min-w-0">
                                                         <div className="w-14 h-14 bg-stone-100 border border-stone-200 flex items-center justify-center text-stone-500 shrink-0">
@@ -280,7 +280,7 @@ export default function Profile() {
                                                         </div>
                                                     ))}
                                                 </div>
-                                            </article>
+                                            </Link>
                                         ))}
                                     </div>
                                 ) : (

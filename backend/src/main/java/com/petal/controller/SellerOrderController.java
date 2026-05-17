@@ -35,6 +35,17 @@ public class SellerOrderController {
                 .build());
     }
 
+    @GetMapping("/{id}")
+    public ResponseEntity<ApiResponse<SellerOrderResponse>> getSellerOrder(
+            @AuthenticationPrincipal User seller,
+            @PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.<SellerOrderResponse>builder()
+                .success(true)
+                .message("Seller order fetched successfully")
+                .data(orderService.getSellerOrder(seller, id))
+                .build());
+    }
+
     @PutMapping("/{id}/status")
     public ResponseEntity<ApiResponse<SellerOrderResponse>> updateSellerOrderStatus(
             @AuthenticationPrincipal User seller,

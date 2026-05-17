@@ -8,6 +8,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface OrderRepository extends JpaRepository<Order, Long> {
@@ -30,4 +31,12 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
             order by o.deliveryDate desc, o.id desc
             """)
     List<Order> findByUserOrderByDeliveryDateDescIdDesc(@Param("user") User user);
+
+    @Query("""
+            select distinct o from Order o
+            join fetch o.items i
+            join fetch i.product p
+            where o.id = :id and o.user = :user
+            """)
+    Optional<Order> findByIdAndUser(@Param("id") Long id, @Param("user") User user);
 }

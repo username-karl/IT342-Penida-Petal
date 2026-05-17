@@ -96,12 +96,32 @@ public class OrderService {
     }
 
     @Transactional(readOnly = true)
+    public BuyerOrderResponse getBuyerOrder(User user, Long orderId) {
+        Order order = orderRepository.findByIdAndUser(orderId, user)
+                .orElseThrow(() -> new IllegalArgumentException("Order not found"));
+        return toBuyerOrderResponse(order);
+    }
+
+    @Transactional(readOnly = true)
     public List<SellerOrderResponse> getSellerOrders(User seller) {
         Florist florist = floristService.getOrCreateForUser(seller);
         return orderRepository.findDistinctByItemsProductFloristIdOrderByDeliveryDateAscIdAsc(florist.getId())
                 .stream()
                 .map(order -> toSellerOrderResponse(order, florist.getId()))
                 .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public SellerOrderResponse getSellerOrder(User seller, Long orderId) {
+        Florist florist = floristService.getOrCreateForUser(seller);
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new IllegalArgumentException("Order not found for this seller"));
+
+        if (!hasSellerItems(order, florist.getId())) {
+            throw new IllegalArgumentException("Order not found for this seller");
+        }
+
+        return toSellerOrderResponse(order, florist.getId());
     }
 
     @Transactional

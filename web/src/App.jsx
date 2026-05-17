@@ -10,9 +10,11 @@ import Checkout from './pages/Checkout';
 import CheckoutConfirmation from './pages/CheckoutConfirmation';
 import ProductDetail from './pages/ProductDetail';
 import Profile from './pages/Profile';
+import OrderDetail from './pages/OrderDetail';
 import ShopByMood from './pages/ShopByMood';
 import SellerCentre from './pages/SellerCentre';
 import SellerEducation from './pages/SellerEducation';
+import SellerOrderDetail from './pages/SellerOrderDetail';
 import SellerOnboarding from './pages/SellerOnboarding';
 import './index.css';
 
@@ -36,6 +38,14 @@ export default function App() {
                         element={
                             <ProtectedRoute>
                                 <Profile />
+                            </ProtectedRoute>
+                        }
+                    />
+                    <Route
+                        path="/orders/:id"
+                        element={
+                            <ProtectedRoute>
+                                <OrderDetail />
                             </ProtectedRoute>
                         }
                     />
@@ -100,6 +110,14 @@ export default function App() {
                         element={
                             <ProtectedRoute>
                                 <SellerCentre />
+                            </ProtectedRoute>
+                        }
+                    />
+                    <Route
+                        path="/seller-orders/:id"
+                        element={
+                            <ProtectedRoute>
+                                <SellerOrderDetail />
                             </ProtectedRoute>
                         }
                     />

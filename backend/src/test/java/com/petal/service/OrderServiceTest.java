@@ -61,6 +61,34 @@ class OrderServiceTest {
     }
 
     @Test
+    void getBuyerOrderRejectsOrdersOwnedByAnotherBuyer() {
+        User buyer = User.builder().id(2L).name("Mikaela Santos").role("ROLE_BUYER").build();
+
+        Mockito.when(orderRepository.findByIdAndUser(25L, buyer))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> orderService.getBuyerOrder(buyer, 25L))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Order not found");
+    }
+
+    @Test
+    void getBuyerOrderReturnsCurrentUsersOrderDetail() {
+        User buyer = User.builder().id(2L).name("Mikaela Santos").role("ROLE_BUYER").build();
+        Order order = orderWithItems(buyer, "READY_FOR_PICKUP");
+
+        Mockito.when(orderRepository.findByIdAndUser(25L, buyer))
+                .thenReturn(Optional.of(order));
+
+        BuyerOrderResponse response = orderService.getBuyerOrder(buyer, 25L);
+
+        assertThat(response.getOrderNumber()).isEqualTo("PET-0025");
+        assertThat(response.getRecipientAddress()).isEqualTo("Cebu Business Park");
+        assertThat(response.getPaymentMethod()).isEqualTo("GCASH");
+        assertThat(response.getItems()).hasSize(2);
+    }
+
+    @Test
     void getSellerOrdersReturnsOnlyItemsOwnedByTheAuthenticatedFlorist() {
         User seller = seller();
         Florist florist = Florist.builder().id(9L).user(seller).storeName("Karl's Studio").build();
@@ -113,6 +141,23 @@ class OrderServiceTest {
 
         assertThat(response.getStatus()).isEqualTo("PREPARING");
         verify(orderRepository).save(order);
+    }
+
+    @Test
+    void getSellerOrderReturnsOnlySellerOwnedItems() {
+        User seller = seller();
+        Florist florist = Florist.builder().id(9L).user(seller).storeName("Karl's Studio").build();
+        Order order = orderWithItems(seller, "PENDING");
+
+        Mockito.when(floristService.getOrCreateForUser(seller)).thenReturn(florist);
+        Mockito.when(orderRepository.findById(25L)).thenReturn(Optional.of(order));
+
+        SellerOrderResponse response = orderService.getSellerOrder(seller, 25L);
+
+        assertThat(response.getOrderNumber()).isEqualTo("PET-0025");
+        assertThat(response.getSellerSubtotal()).isEqualByComparingTo("3000.00");
+        assertThat(response.getItems()).hasSize(1);
+        assertThat(response.getRecipientAddress()).isEqualTo("Cebu Business Park");
     }
 
     private User seller() {
