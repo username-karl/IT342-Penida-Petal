@@ -22,6 +22,7 @@ public class SellerOrderResponse {
     private String cardMessage;
     private LocalDate deliveryDate;
     private String timeSlot;
+    private String paymentMethod;
     private String status;
     private BigDecimal sellerSubtotal;
     private String itemSummary;

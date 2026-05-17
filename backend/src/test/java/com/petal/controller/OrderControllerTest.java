@@ -1,6 +1,7 @@
 package com.petal.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.petal.dto.BuyerOrderResponse;
 import com.petal.dto.CreateOrderRequest;
 import com.petal.dto.OrderResponse;
 import com.petal.entity.User;
@@ -22,8 +23,10 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 
+import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -56,6 +59,7 @@ class OrderControllerTest {
                 .cardMessage("Happy birthday!")
                 .deliveryDate(LocalDate.now().plusDays(1))
                 .timeSlot("AM")
+                .paymentMethod("GCASH")
                 .build();
 
         Mockito.when(orderService.createOrder(eq(user), eq(request))).thenReturn(OrderResponse.builder()
@@ -63,6 +67,7 @@ class OrderControllerTest {
                 .status("PENDING")
                 .deliveryDate(request.getDeliveryDate())
                 .timeSlot("AM")
+                .paymentMethod("GCASH")
                 .totalAmount(new BigDecimal("98.00"))
                 .message("Order placed successfully.")
                 .build());
@@ -75,7 +80,35 @@ class OrderControllerTest {
                 .andExpect(jsonPath("$.success", is(true)))
                 .andExpect(jsonPath("$.data.status", is("PENDING")))
                 .andExpect(jsonPath("$.data.timeSlot", is("AM")))
+                .andExpect(jsonPath("$.data.paymentMethod", is("GCASH")))
                 .andExpect(jsonPath("$.data.message", is("Order placed successfully.")));
+    }
+
+    @Test
+    void getOrdersReturnsCurrentBuyerOrderHistory() throws Exception {
+        User user = authenticatedUser();
+
+        Mockito.when(orderService.getBuyerOrders(user)).thenReturn(List.of(
+                BuyerOrderResponse.builder()
+                        .id(25L)
+                        .orderNumber("PET-0025")
+                        .status("PREPARING")
+                        .deliveryDate(LocalDate.of(2026, 5, 18))
+                        .timeSlot("AM")
+                        .paymentMethod("GCASH")
+                        .totalAmount(new BigDecimal("2468.00"))
+                        .itemSummary("Aurora Hydrangea x2")
+                        .build()));
+
+        mockMvc.perform(get("/api/orders")
+                        .principal(SecurityContextHolder.getContext().getAuthentication()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.data", hasSize(1)))
+                .andExpect(jsonPath("$.data[0].orderNumber", is("PET-0025")))
+                .andExpect(jsonPath("$.data[0].status", is("PREPARING")))
+                .andExpect(jsonPath("$.data[0].paymentMethod", is("GCASH")))
+                .andExpect(jsonPath("$.data[0].itemSummary", is("Aurora Hydrangea x2")));
     }
 
     private User authenticatedUser() {

@@ -37,7 +37,7 @@ public class Order {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    @Column(nullable = false)
+    @Column(nullable = false, columnDefinition = "varchar(255) default 'COD'")
     private String recipientName;
 
     @Column(nullable = false, length = 1000)
@@ -51,6 +51,10 @@ public class Order {
 
     @Column(nullable = false)
     private String timeSlot;
+
+    @Column(nullable = false)
+    @Builder.Default
+    private String paymentMethod = "COD";
 
     @Column(nullable = false)
     @Builder.Default

@@ -1,5 +1,7 @@
 package com.petal.service;
 
+import com.petal.dto.BuyerOrderItemResponse;
+import com.petal.dto.BuyerOrderResponse;
 import com.petal.dto.CreateOrderRequest;
 import com.petal.dto.OrderResponse;
 import com.petal.dto.SellerOrderItemResponse;
@@ -54,6 +56,7 @@ public class OrderService {
                 .cardMessage(request.getCardMessage())
                 .deliveryDate(request.getDeliveryDate())
                 .timeSlot(request.getTimeSlot())
+                .paymentMethod(normalizePaymentMethod(request.getPaymentMethod()))
                 .status("PENDING")
                 .totalAmount(totalAmount)
                 .build();
@@ -78,9 +81,18 @@ public class OrderService {
                 .status(savedOrder.getStatus())
                 .deliveryDate(savedOrder.getDeliveryDate())
                 .timeSlot(savedOrder.getTimeSlot())
+                .paymentMethod(displayPaymentMethod(savedOrder.getPaymentMethod()))
                 .totalAmount(savedOrder.getTotalAmount())
                 .message("Order placed successfully.")
                 .build();
+    }
+
+    @Transactional(readOnly = true)
+    public List<BuyerOrderResponse> getBuyerOrders(User user) {
+        return orderRepository.findByUserOrderByDeliveryDateDescIdDesc(user)
+                .stream()
+                .map(this::toBuyerOrderResponse)
+                .toList();
     }
 
     @Transactional(readOnly = true)
@@ -131,6 +143,7 @@ public class OrderService {
                 .cardMessage(order.getCardMessage())
                 .deliveryDate(order.getDeliveryDate())
                 .timeSlot(order.getTimeSlot())
+                .paymentMethod(displayPaymentMethod(order.getPaymentMethod()))
                 .status(order.getStatus())
                 .sellerSubtotal(subtotal)
                 .itemSummary(items.stream()
@@ -138,6 +151,45 @@ public class OrderService {
                         .reduce((first, second) -> first + ", " + second)
                         .orElse("No seller items"))
                 .items(items)
+                .build();
+    }
+
+    private BuyerOrderResponse toBuyerOrderResponse(Order order) {
+        List<BuyerOrderItemResponse> items = order.getItems().stream()
+                .sorted(Comparator.comparing(OrderItem::getId, Comparator.nullsLast(Long::compareTo)))
+                .map(this::toBuyerOrderItemResponse)
+                .toList();
+
+        return BuyerOrderResponse.builder()
+                .id(order.getId())
+                .orderNumber("PET-" + String.format("%04d", order.getId()))
+                .recipientName(order.getRecipientName())
+                .recipientAddress(order.getRecipientAddress())
+                .cardMessage(order.getCardMessage())
+                .deliveryDate(order.getDeliveryDate())
+                .timeSlot(order.getTimeSlot())
+                .paymentMethod(displayPaymentMethod(order.getPaymentMethod()))
+                .status(order.getStatus())
+                .totalAmount(order.getTotalAmount())
+                .itemSummary(items.stream()
+                        .map(item -> item.getProductName() + " x" + item.getQuantity())
+                        .reduce((first, second) -> first + ", " + second)
+                        .orElse("No items"))
+                .items(items)
+                .build();
+    }
+
+    private BuyerOrderItemResponse toBuyerOrderItemResponse(OrderItem item) {
+        BigDecimal lineTotal = item.getUnitPrice().multiply(BigDecimal.valueOf(item.getQuantity()));
+        Product product = item.getProduct();
+        return BuyerOrderItemResponse.builder()
+                .productId(product.getId())
+                .productName(item.getProductName())
+                .imageUrl(product.getImageUrl())
+                .floristName(product.getFloristName())
+                .quantity(item.getQuantity())
+                .unitPrice(item.getUnitPrice())
+                .lineTotal(lineTotal)
                 .build();
     }
 
@@ -163,5 +215,18 @@ public class OrderService {
             throw new IllegalArgumentException("Unsupported order status");
         }
         return normalized;
+    }
+
+    private String normalizePaymentMethod(String paymentMethod) {
+        String normalized = paymentMethod == null ? "" : paymentMethod.trim().toUpperCase();
+        Set<String> allowed = Set.of("COD", "GCASH", "MAYA", "CARD");
+        if (!allowed.contains(normalized)) {
+            throw new IllegalArgumentException("Unsupported payment method");
+        }
+        return normalized;
+    }
+
+    private String displayPaymentMethod(String paymentMethod) {
+        return paymentMethod == null || paymentMethod.isBlank() ? "COD" : paymentMethod;
     }
 }

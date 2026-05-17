@@ -1,6 +1,7 @@
 package com.petal.controller;
 
 import com.petal.dto.ApiResponse;
+import com.petal.dto.BuyerOrderResponse;
 import com.petal.dto.CreateOrderRequest;
 import com.petal.dto.OrderResponse;
 import com.petal.entity.User;
@@ -10,9 +11,12 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/orders")
@@ -20,6 +24,16 @@ import org.springframework.web.bind.annotation.RestController;
 public class OrderController {
 
     private final OrderService orderService;
+
+    @GetMapping
+    public ResponseEntity<ApiResponse<List<BuyerOrderResponse>>> getOrders(
+            @AuthenticationPrincipal User user) {
+        return ResponseEntity.ok(ApiResponse.<List<BuyerOrderResponse>>builder()
+                .success(true)
+                .message("Orders fetched successfully")
+                .data(orderService.getBuyerOrders(user))
+                .build());
+    }
 
     @PostMapping
     public ResponseEntity<ApiResponse<OrderResponse>> createOrder(

@@ -10,6 +10,17 @@ const formatPeso = (value) => `₱${Number(value || 0).toLocaleString('en-PH', {
 
 const today = new Date().toISOString().slice(0, 10);
 
+const paymentOptions = [
+    { value: 'COD', label: 'Cash on Delivery', helper: 'Pay the rider when the flowers arrive.' },
+    { value: 'GCASH', label: 'GCash', helper: 'Mobile wallet payment reserved for confirmation.' },
+    { value: 'MAYA', label: 'Maya', helper: 'Pay through Maya after florist confirmation.' },
+    { value: 'CARD', label: 'Card', helper: 'Card capture placeholder for this build.' },
+];
+
+function paymentLabel(value) {
+    return paymentOptions.find((option) => option.value === value)?.label || value;
+}
+
 export default function Checkout() {
     const navigate = useNavigate();
     const [cart, setCart] = useState({ items: [], subtotal: 0 });
@@ -22,6 +33,7 @@ export default function Checkout() {
         cardMessage: '',
         deliveryDate: today,
         timeSlot: 'AM',
+        paymentMethod: 'COD',
     });
 
     useEffect(() => {
@@ -188,10 +200,33 @@ export default function Checkout() {
                                 />
                                 <p className="text-xs text-stone-400 mt-2">{cardCharacters}/200 characters</p>
                             </div>
+
+                            <div>
+                                <div className="flex items-center gap-2 mb-4">
+                                    <CreditCard size={18} strokeWidth={1.5} className="text-stone-500" />
+                                    <h2 className="text-3xl font-serif text-stone-900">Payment Method</h2>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    {paymentOptions.map((option) => (
+                                        <label key={option.value} className={`border p-4 cursor-pointer transition-colors ${formData.paymentMethod === option.value ? 'border-stone-900 bg-stone-900 text-white' : 'border-stone-200 bg-[#FDFCF8] text-stone-700 hover:border-stone-500'}`}>
+                                            <input
+                                                type="radio"
+                                                name="paymentMethod"
+                                                value={option.value}
+                                                checked={formData.paymentMethod === option.value}
+                                                onChange={(event) => updateField('paymentMethod', event.target.value)}
+                                                className="hidden"
+                                            />
+                                            <span className="block text-sm font-semibold">{option.label}</span>
+                                            <span className={`mt-1 block text-xs leading-relaxed ${formData.paymentMethod === option.value ? 'text-white/70' : 'text-stone-500'}`}>{option.helper}</span>
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
                         </section>
 
                         <aside className="bg-white/80 border border-stone-200 p-6 sticky top-24">
-                            <h2 className="text-3xl font-serif text-stone-900 mb-6">Mock Payment</h2>
+                            <h2 className="text-3xl font-serif text-stone-900 mb-6">Order Summary</h2>
                             <div className="space-y-4 mb-6">
                                 {cart.items.map((item) => (
                                     <div key={item.id} className="flex gap-3">
@@ -210,8 +245,12 @@ export default function Checkout() {
                                     <span className="font-medium">{formatPeso(cart.subtotal)}</span>
                                 </div>
                                 <div className="flex justify-between">
+                                    <span className="text-stone-500">Delivery</span>
+                                    <span className="font-medium">Included</span>
+                                </div>
+                                <div className="flex justify-between">
                                     <span className="text-stone-500">Payment</span>
-                                    <span className="font-medium">Mock only</span>
+                                    <span className="font-medium">{paymentLabel(formData.paymentMethod)}</span>
                                 </div>
                             </div>
                             <div className="border-t border-stone-100 mt-5 pt-5 flex justify-between items-center">
@@ -224,10 +263,10 @@ export default function Checkout() {
                                 className="mt-6 w-full h-12 bg-stone-900 text-white text-sm font-medium hover:bg-stone-800 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
                             >
                                 <CreditCard size={17} strokeWidth={1.5} />
-                                {submitting ? 'Placing Order...' : 'Place Mock Order'}
+                                {submitting ? 'Placing Order...' : 'Place Order'}
                             </button>
                             <p className="text-xs text-stone-400 mt-4 leading-relaxed">
-                                No real card data is collected. This creates a pending order for florist review.
+                                Payment is recorded for order tracking. Online payment capture is still a placeholder in this build.
                             </p>
                         </aside>
                     </form>

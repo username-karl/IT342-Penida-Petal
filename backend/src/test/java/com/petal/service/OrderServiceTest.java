@@ -1,5 +1,6 @@
 package com.petal.service;
 
+import com.petal.dto.BuyerOrderResponse;
 import com.petal.dto.SellerOrderResponse;
 import com.petal.dto.SellerOrderStatusRequest;
 import com.petal.entity.Florist;
@@ -41,6 +42,25 @@ class OrderServiceTest {
     private OrderService orderService;
 
     @Test
+    void getBuyerOrdersReturnsOnlyCurrentUsersOrderHistory() {
+        User buyer = User.builder().id(2L).name("Mikaela Santos").role("ROLE_BUYER").build();
+        Order order = orderWithItems(buyer, "READY_FOR_PICKUP");
+
+        Mockito.when(orderRepository.findByUserOrderByDeliveryDateDescIdDesc(buyer))
+                .thenReturn(List.of(order));
+
+        List<BuyerOrderResponse> orders = orderService.getBuyerOrders(buyer);
+
+        assertThat(orders).hasSize(1);
+        assertThat(orders.get(0).getOrderNumber()).isEqualTo("PET-0025");
+        assertThat(orders.get(0).getStatus()).isEqualTo("READY_FOR_PICKUP");
+        assertThat(orders.get(0).getPaymentMethod()).isEqualTo("GCASH");
+        assertThat(orders.get(0).getTotalAmount()).isEqualByComparingTo("3800.00");
+        assertThat(orders.get(0).getItemSummary()).isEqualTo("Aurora Hydrangea x2, Other Arrangement x1");
+        assertThat(orders.get(0).getItems()).hasSize(2);
+    }
+
+    @Test
     void getSellerOrdersReturnsOnlyItemsOwnedByTheAuthenticatedFlorist() {
         User seller = seller();
         Florist florist = Florist.builder().id(9L).user(seller).storeName("Karl's Studio").build();
@@ -55,6 +75,7 @@ class OrderServiceTest {
         assertThat(orders).hasSize(1);
         assertThat(orders.get(0).getOrderNumber()).isEqualTo("PET-0025");
         assertThat(orders.get(0).getSellerSubtotal()).isEqualByComparingTo("3000.00");
+        assertThat(orders.get(0).getPaymentMethod()).isEqualTo("GCASH");
         assertThat(orders.get(0).getItemSummary()).isEqualTo("Aurora Hydrangea x2");
         assertThat(orders.get(0).getItems()).hasSize(1);
     }
@@ -126,6 +147,7 @@ class OrderServiceTest {
                 .deliveryDate(LocalDate.of(2026, 5, 18))
                 .timeSlot("AM")
                 .status(status)
+                .paymentMethod("GCASH")
                 .totalAmount(new BigDecimal("3800.00"))
                 .build();
         order.getItems().add(OrderItem.builder()

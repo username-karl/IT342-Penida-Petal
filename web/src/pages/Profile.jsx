@@ -1,20 +1,84 @@
 import { useAuth } from '../context/AuthContext';
 import { useNavigate, Link } from 'react-router-dom';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
-    Leaf, Shield, Edit2, Plus, Gift, Heart
+    AlertCircle, CheckCircle2, Gift, Heart, Leaf, PackageCheck, Plus, Shield, Truck, Edit2
 } from 'lucide-react';
+import { ordersAPI } from '../services/api';
+
+function currency(value) {
+    const number = Number(value || 0);
+    return `PHP ${number.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function statusLabel(status) {
+    const labels = {
+        PENDING: 'Order Placed',
+        PREPARING: 'Being Prepared',
+        READY_FOR_PICKUP: 'Ready for Pickup',
+        COMPLETED: 'Delivered',
+        CANCELLED: 'Cancelled',
+    };
+    return labels[status] || status;
+}
+
+function statusClass(status) {
+    if (status === 'COMPLETED' || status === 'READY_FOR_PICKUP') return 'bg-green-50 text-green-800 border-green-200';
+    if (status === 'CANCELLED') return 'bg-stone-100 text-stone-500 border-stone-200';
+    if (status === 'PREPARING') return 'bg-amber-50 text-amber-800 border-amber-200';
+    return 'bg-rose-50 text-rose-800 border-rose-200';
+}
+
+function paymentLabel(value) {
+    const labels = {
+        COD: 'Cash on Delivery',
+        GCASH: 'GCash',
+        MAYA: 'Maya',
+        CARD: 'Card',
+    };
+    return labels[value] || value;
+}
+
+function deliveryLabel(order) {
+    if (!order.deliveryDate) return order.timeSlot || 'Delivery pending';
+    const date = new Date(`${order.deliveryDate}T00:00:00`);
+    return `${date.toLocaleDateString('en-PH', { month: 'long', day: 'numeric', year: 'numeric' })} · ${order.timeSlot}`;
+}
 
 export default function Profile() {
     const { user, logout } = useAuth();
     const navigate = useNavigate();
     const [isEditing, setIsEditing] = useState(false);
+    const [orders, setOrders] = useState([]);
+    const [ordersLoading, setOrdersLoading] = useState(true);
+    const [ordersError, setOrdersError] = useState('');
 
     const displayName = user?.name || 'Guest';
     const email = user?.email || 'guest@example.com';
     const role = user?.role || 'Customer';
     const initials = displayName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
     const isArtisan = user?.role === 'artisan' || user?.role === 'ARTISAN' || user?.role === 'ROLE_FLORIST';
+
+    useEffect(() => {
+        const loadOrders = async () => {
+            setOrdersLoading(true);
+            setOrdersError('');
+            try {
+                const response = await ordersAPI.getBuyerOrders();
+                setOrders(response.data.data || []);
+            } catch (err) {
+                setOrdersError(err.response?.data?.message || err.message || 'Unable to load order history');
+            } finally {
+                setOrdersLoading(false);
+            }
+        };
+
+        if (user && !isArtisan) {
+            loadOrders();
+        } else {
+            setOrdersLoading(false);
+        }
+    }, [isArtisan, user]);
 
     const handleLogout = () => {
         logout();
@@ -158,9 +222,88 @@ export default function Profile() {
                             </div>
                         </section>
 
+                        {!isArtisan && (
+                            <section>
+                                <div className="flex items-center justify-between mb-6 border-b border-stone-200 pb-4">
+                                    <h3 className="text-2xl font-serif text-stone-900">Order History</h3>
+                                    <Link to="/dashboard" className="text-xs uppercase tracking-widest text-stone-500 hover:text-stone-900 transition-colors">
+                                        Continue Shopping
+                                    </Link>
+                                </div>
+
+                                {ordersError && (
+                                    <div className="mb-4 border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 flex items-center gap-2">
+                                        <AlertCircle size={16} /> {ordersError}
+                                    </div>
+                                )}
+
+                                {ordersLoading ? (
+                                    <div className="space-y-4">
+                                        {[1, 2].map((item) => (
+                                            <div key={item} className="h-28 bg-stone-100 animate-pulse" />
+                                        ))}
+                                    </div>
+                                ) : orders.length ? (
+                                    <div className="space-y-4">
+                                        {orders.map((order) => (
+                                            <article key={order.id} className="border border-stone-200 bg-white p-4 sm:p-5 hover:border-stone-300 transition-colors">
+                                                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                                                    <div className="flex gap-4 min-w-0">
+                                                        <div className="w-14 h-14 bg-stone-100 border border-stone-200 flex items-center justify-center text-stone-500 shrink-0">
+                                                            {order.status === 'COMPLETED' ? <CheckCircle2 size={22} /> : <Truck size={22} />}
+                                                        </div>
+                                                        <div className="min-w-0">
+                                                            <p className="text-xs uppercase tracking-[0.18em] text-stone-400">{order.orderNumber}</p>
+                                                            <h4 className="mt-1 font-serif text-xl text-stone-950">{order.itemSummary}</h4>
+                                                            <p className="mt-1 text-sm text-stone-500">{deliveryLabel(order)}</p>
+                                                            <p className="mt-1 text-xs text-stone-400">Deliver to {order.recipientName}</p>
+                                                            <p className="mt-1 text-xs text-stone-400">Payment: {paymentLabel(order.paymentMethod)}</p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="sm:text-right">
+                                                        <span className={`inline-flex border px-2.5 py-1 text-xs font-medium ${statusClass(order.status)}`}>
+                                                            {statusLabel(order.status)}
+                                                        </span>
+                                                        <p className="mt-2 font-semibold text-stone-950">{currency(order.totalAmount)}</p>
+                                                    </div>
+                                                </div>
+
+                                                <div className="mt-4 border-t border-stone-100 pt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                                    {(order.items || []).map((item) => (
+                                                        <div key={`${order.id}-${item.productId}`} className="flex gap-3 min-w-0">
+                                                            <img src={item.imageUrl} alt={item.productName} className="h-14 w-12 object-cover bg-stone-100 border border-stone-200" />
+                                                            <div className="min-w-0">
+                                                                <p className="text-sm font-medium text-stone-900 truncate">{item.productName}</p>
+                                                                <p className="text-xs text-stone-500">{item.floristName}</p>
+                                                                <p className="text-xs text-stone-400">Qty {item.quantity} · {currency(item.lineTotal)}</p>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </article>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="border border-dashed border-stone-300 bg-stone-50 px-6 py-10 text-center">
+                                        <PackageCheck className="mx-auto mb-3 text-stone-400" size={26} />
+                                        <h4 className="font-serif text-xl text-stone-900">No orders yet</h4>
+                                        <p className="mt-1 text-sm text-stone-500">Your checkout orders and florist status updates will appear here.</p>
+                                        <Link to="/dashboard" className="mt-5 inline-flex h-10 items-center justify-center bg-stone-900 px-5 text-sm font-semibold text-white hover:bg-stone-800">
+                                            Browse flowers
+                                        </Link>
+                                    </div>
+                                )}
+                            </section>
+                        )}
+
                         {/* Recent Orders (Moved down) */}
-                        <section>
-                            <h3 className="text-2xl font-serif text-stone-900 mb-6 border-b border-stone-200 pb-4">Order History</h3>
+                        <section className="hidden">
+                            <div className="flex items-center justify-between mb-6 border-b border-stone-200 pb-4">
+                                <h3 className="text-2xl font-serif text-stone-900">Order History</h3>
+                                <Link to="/dashboard" className="text-xs uppercase tracking-widest text-stone-500 hover:text-stone-900 transition-colors">
+                                    Continue Shopping
+                                </Link>
+                            </div>
                             <div className="space-y-4">
                                 {[1].map((i) => (
                                     <div key={i} className="flex items-center justify-between p-4 border border-stone-100 hover:border-stone-300 transition-colors bg-white">

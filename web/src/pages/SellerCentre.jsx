@@ -22,6 +22,7 @@ import {
     X,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import Grainient from '../components/Grainient';
 import { floristAPI, ordersAPI, productsAPI } from '../services/api';
 
 const moodOptions = ['romance', 'celebration', 'sympathy', 'apology', 'calm', 'gratitude', 'wildflower'];
@@ -112,6 +113,16 @@ function statusLabel(status) {
         CANCELLED: 'Cancelled',
     };
     return labels[status] || status;
+}
+
+function paymentLabel(value) {
+    const labels = {
+        COD: 'COD',
+        GCASH: 'GCash',
+        MAYA: 'Maya',
+        CARD: 'Card',
+    };
+    return labels[value] || value;
 }
 
 function nextStatus(status) {
@@ -400,9 +411,36 @@ export default function SellerCentre() {
             <main className="pt-24 pb-16 max-w-7xl mx-auto px-4 sm:px-6">
                 <section className="mb-6 grid grid-cols-1 xl:grid-cols-[1.5fr_0.8fr] gap-4">
                     <div className="bg-stone-950 text-white p-6 sm:p-8 min-h-[220px] flex flex-col justify-between overflow-hidden relative">
-                        <div className="absolute inset-y-0 right-0 w-1/2 bg-[radial-gradient(circle_at_center,rgba(236,180,150,0.22),transparent_62%)] pointer-events-none" />
+                        <div className="absolute inset-0">
+                            <Grainient
+                                color1="#F1D1B8"
+                                color2="#7E9F8A"
+                                color3="#183D35"
+                                timeSpeed={0.16}
+                                colorBalance={-0.12}
+                                warpStrength={1.65}
+                                warpFrequency={5.8}
+                                warpSpeed={1.2}
+                                warpAmplitude={38}
+                                blendAngle={-18}
+                                blendSoftness={0.12}
+                                rotationAmount={360}
+                                noiseScale={1.6}
+                                grainAmount={0.12}
+                                grainScale={2.8}
+                                grainAnimated={false}
+                                contrast={1.35}
+                                gamma={1.0}
+                                saturation={1.05}
+                                centerX={-0.18}
+                                centerY={0.04}
+                                zoom={0.78}
+                            />
+                        </div>
+                        <div className="absolute inset-0 bg-stone-950/45 pointer-events-none" />
+                        <div className="absolute inset-0 bg-gradient-to-r from-stone-950/55 via-stone-950/20 to-transparent pointer-events-none" />
                         <div className="relative">
-                            <p className="text-xs uppercase tracking-[0.24em] text-stone-400 mb-4">Florist Operations</p>
+                            <p className="text-xs uppercase tracking-[0.24em] text-white/70 mb-4">Florist Operations</p>
                             <h1 className="font-serif text-4xl sm:text-5xl leading-tight max-w-2xl">
                                 Manage listings, orders, and your Cebu studio in one place.
                             </h1>
@@ -514,7 +552,7 @@ export default function SellerCentre() {
                                                     <div>
                                                         <p className="text-xs uppercase tracking-[0.18em] text-stone-400">{order.orderNumber}</p>
                                                         <p className="mt-2 font-medium text-stone-950">{order.itemSummary}</p>
-                                                        <p className="text-sm text-stone-500">{order.buyerName} · {deliveryLabel(order)}</p>
+                                                        <p className="text-sm text-stone-500">{order.buyerName} · {deliveryLabel(order)} · {paymentLabel(order.paymentMethod)}</p>
                                                     </div>
                                                     <div className="md:text-right">
                                                         <span className={`inline-flex border px-2.5 py-1 text-xs font-medium ${statusClass(order.status)}`}>{statusLabel(order.status)}</span>
@@ -583,7 +621,7 @@ export default function SellerCentre() {
                                             {orders.map((order) => (
                                                 <tr key={order.id} className="hover:bg-stone-50">
                                                     <td className="px-5 py-4 font-medium text-stone-950">{order.orderNumber}<p className="text-xs font-normal text-stone-500 mt-1">{order.itemSummary}</p></td>
-                                                    <td className="px-5 py-4 text-stone-600">{order.buyerName}<p className="text-xs text-stone-400 mt-1">For {order.recipientName}</p></td>
+                                                    <td className="px-5 py-4 text-stone-600">{order.buyerName}<p className="text-xs text-stone-400 mt-1">For {order.recipientName}</p><p className="text-xs text-stone-400 mt-1">{paymentLabel(order.paymentMethod)}</p></td>
                                                     <td className="px-5 py-4 text-stone-600">{deliveryLabel(order)}</td>
                                                     <td className="px-5 py-4 font-semibold">{currency(order.sellerSubtotal)}</td>
                                                     <td className="px-5 py-4"><span className={`inline-flex border px-2.5 py-1 text-xs font-medium ${statusClass(order.status)}`}>{statusLabel(order.status)}</span></td>

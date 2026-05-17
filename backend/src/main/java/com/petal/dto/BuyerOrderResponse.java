@@ -7,17 +7,23 @@ import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class OrderResponse {
+public class BuyerOrderResponse {
     private Long id;
-    private String status;
+    private String orderNumber;
+    private String recipientName;
+    private String recipientAddress;
+    private String cardMessage;
     private LocalDate deliveryDate;
     private String timeSlot;
     private String paymentMethod;
+    private String status;
     private BigDecimal totalAmount;
-    private String message;
+    private String itemSummary;
+    private List<BuyerOrderItemResponse> items;
 }

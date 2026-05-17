@@ -63,6 +63,7 @@ class SellerOrderControllerTest {
                         .deliveryDate(LocalDate.of(2026, 5, 18))
                         .timeSlot("AM")
                         .status("PENDING")
+                        .paymentMethod("GCASH")
                         .sellerSubtotal(new BigDecimal("2950.00"))
                         .itemSummary("Aurora Hydrangea x2")
                         .build()));
@@ -73,6 +74,7 @@ class SellerOrderControllerTest {
                 .andExpect(jsonPath("$.success", is(true)))
                 .andExpect(jsonPath("$.data", hasSize(1)))
                 .andExpect(jsonPath("$.data[0].orderNumber", is("PET-0012")))
+                .andExpect(jsonPath("$.data[0].paymentMethod", is("GCASH")))
                 .andExpect(jsonPath("$.data[0].sellerSubtotal", is(2950.00)))
                 .andExpect(jsonPath("$.data[0].itemSummary", is("Aurora Hydrangea x2")));
     }
@@ -85,6 +87,7 @@ class SellerOrderControllerTest {
                         .id(12L)
                         .orderNumber("PET-0012")
                         .status("PREPARING")
+                        .paymentMethod("GCASH")
                         .sellerSubtotal(new BigDecimal("2950.00"))
                         .build());
 
