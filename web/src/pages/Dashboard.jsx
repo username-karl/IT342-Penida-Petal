@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import {
     Menu, Search, ShoppingBag, ArrowRight, Star, Flower2,
     Package, Clock, Check, Plus, Mail, Instagram, Facebook,
@@ -8,12 +8,29 @@ import {
 } from 'lucide-react';
 import KpiCard from '../components/KpiCard';
 import ProductCard from '../components/ProductCard';
+import Grainient from '../components/Grainient';
+import { productsAPI } from '../services/api';
+
+const moodFilters = [
+    { label: 'All', value: '' },
+    { label: 'Romance', value: 'romance' },
+    { label: 'Apology', value: 'apology' },
+    { label: 'Celebration', value: 'celebration' },
+    { label: 'Sympathy', value: 'sympathy' },
+    { label: 'Friendship', value: 'friendship' },
+    { label: 'Just Because', value: 'just because' },
+];
 
 export default function Dashboard() {
     const { user, logout } = useAuth();
     const navigate = useNavigate();
+    const [searchParams, setSearchParams] = useSearchParams();
     const [showProfileMenu, setShowProfileMenu] = useState(false);
     const [scrolled, setScrolled] = useState(false);
+    const [products, setProducts] = useState([]);
+    const [selectedMood, setSelectedMood] = useState(searchParams.get('mood') || '');
+    const [productsLoading, setProductsLoading] = useState(true);
+    const [productsError, setProductsError] = useState('');
 
     // Artisan Shop States
     const [artisanTab, setArtisanTab] = useState('overview');
@@ -29,6 +46,29 @@ export default function Dashboard() {
         return () => window.removeEventListener('scroll', handleScroll);
     }, []);
 
+    useEffect(() => {
+        const fetchProducts = async () => {
+            setProductsLoading(true);
+            setProductsError('');
+
+            try {
+                const response = await productsAPI.getProducts(selectedMood);
+                setProducts(response.data.data || []);
+            } catch (err) {
+                setProductsError(err.response?.data?.message || err.message || 'Unable to load products');
+            } finally {
+                setProductsLoading(false);
+            }
+        };
+
+        fetchProducts();
+    }, [selectedMood]);
+
+    useEffect(() => {
+        const mood = searchParams.get('mood') || '';
+        setSelectedMood(mood);
+    }, [searchParams]);
+
     const isArtisan = user?.role === 'artisan' || user?.role === 'ARTISAN' || user?.role === 'ROLE_FLORIST';
     const displayName = user?.name || 'Guest';
     const initials = displayName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
@@ -38,22 +78,21 @@ export default function Dashboard() {
         navigate('/login');
     };
 
-    // Mock Products Data (Flower House style)
-    const products = [
-        { id: 1, name: "Wild Pampas", subtitle: "Dried Reed Grass", price: "$45", artisan: "Atelier Vert", image: "/images/product_pampas_1771726515735.png", tag: "Bestseller" },
-        { id: 2, name: "Eucalyptus Cinerea", subtitle: "Preserved Foliage", price: "$28", artisan: "Maison Fleuri", image: "/images/product_eucalyptus_1771726530879.png" },
-        { id: 3, name: "Cotton Softness", subtitle: "Natural Cotton Stems", price: "$32", artisan: "Studio Petal", image: "/images/product_cotton_1771726545396.png" },
-        { id: 4, name: "Kanso Vase", subtitle: "Artisan Ceramic", price: "$55", artisan: "Ceramics by Jo", image: "/images/product_ceramic_vase_1771726567287.png" },
-        { id: 5, name: "The Aurora", subtitle: "Hydrangea & Immortelle", price: "$49", artisan: "L'Herbier", image: "/images/product_aurora_hydrangea_1771726583839.png" },
-        { id: 6, name: "Winter Wreath", subtitle: "Pine & Berries", price: "$65", artisan: "Forest & Co.", image: "/images/product_winter_wreath_1771726603408.png", tag: "Unique Piece" },
-    ];
+    const handleMoodSelect = (mood) => {
+        setSelectedMood(mood);
+        if (mood) {
+            setSearchParams({ mood });
+        } else {
+            setSearchParams({});
+        }
+    };
 
     return (
         <div className="antialiased selection:bg-stone-200 selection:text-stone-900 bg-[#FDFCF8] min-h-screen">
 
             {/* ─── NAVIGATION ─── */}
-            <header className={`fixed top-0 w-full z-50 transition-all duration-300 ${scrolled ? 'bg-[#FDFCF8]/90 backdrop-blur-md border-b border-stone-200 py-3' : 'bg-transparent py-6'}`}>
-                <div className="max-w-7xl mx-auto px-6 flex items-center justify-between">
+            <header className={`fixed top-0 w-full h-20 z-50 border-b ${scrolled ? 'bg-[#FDFCF8]/95 backdrop-blur-md border-stone-300 shadow-md' : 'bg-transparent border-transparent shadow-none'}`}>
+                <div className="max-w-7xl mx-auto px-6 h-full flex items-center justify-between">
                     {/* Mobile Menu Trigger */}
                     <button className="lg:hidden text-stone-800">
                         <Menu size={24} strokeWidth={1.5} />
@@ -75,8 +114,8 @@ export default function Dashboard() {
                         ) : (
                             <>
                                 <button className="text-sm font-medium text-stone-600 hover:text-stone-900 transition-colors">New Arrivals</button>
-                                <button className="text-sm font-medium text-stone-600 hover:text-stone-900 transition-colors">Browse</button>
-                                <button className="text-sm font-medium text-stone-600 hover:text-stone-900 transition-colors">Shop by Mood</button>
+                                <Link to="/browse" className="text-sm font-medium text-stone-600 hover:text-stone-900 transition-colors">Browse</Link>
+                                <Link to="/shop-by-mood" className="text-sm font-medium text-stone-600 hover:text-stone-900 transition-colors">Shop by Mood</Link>
                                 <button className="text-sm font-medium text-stone-600 hover:text-stone-900 transition-colors">Daily Discover</button>
                             </>
                         )}
@@ -89,13 +128,13 @@ export default function Dashboard() {
                         </button>
 
                         {!isArtisan && (
-                            <button className="text-stone-800 hover:text-stone-600 transition-colors relative">
+                            <Link to="/cart" className="text-stone-800 hover:text-stone-600 transition-colors relative">
                                 <ShoppingBag size={20} strokeWidth={1.5} />
                                 <span className="absolute -top-1 -right-1 flex h-2 w-2">
                                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-stone-400 opacity-75"></span>
                                     <span className="relative inline-flex rounded-full h-2 w-2 bg-stone-800"></span>
                                 </span>
-                            </button>
+                            </Link>
                         )}
 
                         {/* Profile Dropdown */}
@@ -155,14 +194,33 @@ export default function Dashboard() {
             <main className="pt-20">
                 {/* ─── HERO SECTION ─── */}
                 <section className="relative min-h-[90vh] flex items-center justify-center overflow-hidden">
-                    {/* Background Image */}
                     <div className="absolute inset-0 z-0">
-                        <img
-                            src="https://images.unsplash.com/photo-1629196914375-f7e48f477b6d?q=80&w=2576&auto=format&fit=crop"
-                            alt="Artistic Dried Flowers"
-                            className="w-full h-full object-cover object-center opacity-90 grayscale-[20%]"
+                        <Grainient
+                            color1="#F9C7C7"
+                            color2="#C98578"
+                            color3="#7C4A44"
+                            timeSpeed={0.18}
+                            colorBalance={-0.04}
+                            warpStrength={1.85}
+                            warpFrequency={6.2}
+                            warpSpeed={1.25}
+                            warpAmplitude={34}
+                            blendAngle={-24}
+                            blendSoftness={0.14}
+                            rotationAmount={380}
+                            noiseScale={1.7}
+                            grainAmount={0.1}
+                            grainScale={2.4}
+                            grainAnimated={false}
+                            contrast={1.22}
+                            gamma={1.0}
+                            saturation={1.05}
+                            centerX={-0.08}
+                            centerY={0.02}
+                            zoom={0.82}
                         />
-                        <div className="absolute inset-0 bg-gradient-to-t from-[#FDFCF8] via-transparent to-transparent opacity-90"></div>
+                        <div className="absolute inset-0 bg-[#FDFCF8]/8"></div>
+                        <div className="absolute inset-0 bg-gradient-to-t from-[#FDFCF8] via-[#FDFCF8]/10 to-transparent"></div>
                     </div>
 
                     <div className="relative z-10 text-center max-w-4xl px-6 mt-20">
@@ -190,7 +248,7 @@ export default function Dashboard() {
                     <div className="flex whitespace-nowrap gap-12 animate-marquee items-center opacity-60 hover:opacity-100 transition-opacity">
                         {[...Array(2)].map((_, i) => (
                             <div key={i} className="flex gap-12">
-                                <div className="flex items-center gap-2 text-xs uppercase tracking-widest text-stone-500"><Star size={12} /> Handmade in Paris</div>
+                                <div className="flex items-center gap-2 text-xs uppercase tracking-widest text-stone-500"><Star size={12} /> Handmade in Cebu, Philippines</div>
                                 <div className="flex items-center gap-2 text-xs uppercase tracking-widest text-stone-500"><Flower2 size={12} /> 100% Natural Flowers</div>
                                 <div className="flex items-center gap-2 text-xs uppercase tracking-widest text-stone-500"><Package size={12} /> Zero Plastic Packaging</div>
                                 <div className="flex items-center gap-2 text-xs uppercase tracking-widest text-stone-500"><Clock size={12} /> Lasts 2+ Years</div>
@@ -204,32 +262,55 @@ export default function Dashboard() {
                     <div className="flex flex-col md:flex-row justify-between items-end mb-12 gap-6">
                         <div>
                             <h2 className="text-3xl md:text-4xl font-serif text-stone-900 tracking-tight mb-2">Seasonal Selection</h2>
-                            <p className="text-stone-500 text-sm font-light">Autumn / Winter 2026</p>
+                            <p className="text-stone-500 text-sm font-light">Shop by mood and local artisan availability</p>
                         </div>
 
-                        <div className="flex gap-6 border-b border-stone-200 pb-2">
-                            <label className="custom-checkbox flex items-center gap-2 cursor-pointer group">
-                                <input type="checkbox" className="hidden" />
-                                <div className="w-4 h-4 border border-stone-300 rounded-sm flex items-center justify-center transition-colors group-hover:border-stone-500 bg-white">
-                                    <Check size={10} className="text-stone-900 hidden" strokeWidth={3} />
-                                </div>
-                                <span className="text-xs font-medium text-stone-600 uppercase tracking-wide">In Stock</span>
-                            </label>
-                            <label className="custom-checkbox flex items-center gap-2 cursor-pointer group">
-                                <input type="checkbox" className="hidden" defaultChecked />
-                                <div className="w-4 h-4 border border-stone-300 rounded-sm flex items-center justify-center transition-colors group-hover:border-stone-500 bg-white">
-                                    <Check size={10} className="text-stone-900 hidden" strokeWidth={3} />
-                                </div>
-                                <span className="text-xs font-medium text-stone-600 uppercase tracking-wide">New Arrivals</span>
-                            </label>
+                        <div className="flex flex-wrap justify-start md:justify-end gap-2 max-w-2xl">
+                            {moodFilters.map((mood) => (
+                                <button
+                                    key={mood.value || 'all'}
+                                    type="button"
+                                    onClick={() => handleMoodSelect(mood.value)}
+                                    className={`h-10 px-4 border rounded-sm text-xs font-medium uppercase tracking-wide transition-colors ${selectedMood === mood.value
+                                        ? 'bg-stone-900 border-stone-900 text-white'
+                                        : 'bg-white/70 border-stone-200 text-stone-600 hover:border-stone-500 hover:text-stone-900'
+                                        }`}
+                                >
+                                    {mood.label}
+                                </button>
+                            ))}
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-y-16 gap-x-8">
-                        {products.map((product) => (
-                            <ProductCard key={product.id} product={product} />
-                        ))}
-                    </div>
+                    {productsError && (
+                        <div className="mb-10 border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">
+                            {productsError}
+                        </div>
+                    )}
+
+                    {productsLoading ? (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-y-16 gap-x-8">
+                            {[...Array(6)].map((_, index) => (
+                                <div key={index} className="animate-pulse">
+                                    <div className="aspect-[4/5] bg-stone-100 mb-4 rounded-sm" />
+                                    <div className="h-3 w-24 bg-stone-100 mb-3" />
+                                    <div className="h-5 w-40 bg-stone-100 mb-2" />
+                                    <div className="h-3 w-56 bg-stone-100" />
+                                </div>
+                            ))}
+                        </div>
+                    ) : products.length > 0 ? (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-y-16 gap-x-8">
+                            {products.map((product) => (
+                                <ProductCard key={product.id} product={product} />
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="border border-stone-200 bg-white/70 px-6 py-12 text-center">
+                            <p className="font-serif text-2xl text-stone-900 mb-2">No arrangements found</p>
+                            <p className="text-sm text-stone-500">Try another mood to discover more local creations.</p>
+                        </div>
+                    )}
 
                     <div className="mt-20 text-center">
                         <button className="inline-flex items-center gap-2 text-sm font-medium text-stone-500 hover:text-stone-900 transition-colors border-b border-stone-300 hover:border-stone-900 pb-1">
