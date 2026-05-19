@@ -2,9 +2,9 @@ import { useAuth } from '../context/AuthContext';
 import { useNavigate, Link } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import {
-    AlertCircle, CheckCircle2, Gift, Heart, Leaf, PackageCheck, Plus, Shield, Truck, Edit2
+    AlertCircle, CheckCircle2, Gift, Heart, Leaf, MapPin, PackageCheck, Plus, Shield, Star, Trash2, Truck, Edit2
 } from 'lucide-react';
-import { ordersAPI } from '../services/api';
+import { addressesAPI, ordersAPI } from '../services/api';
 
 function currency(value) {
     const number = Number(value || 0);
@@ -52,6 +52,16 @@ export default function Profile() {
     const [orders, setOrders] = useState([]);
     const [ordersLoading, setOrdersLoading] = useState(true);
     const [ordersError, setOrdersError] = useState('');
+    const [addresses, setAddresses] = useState([]);
+    const [addressesLoading, setAddressesLoading] = useState(true);
+    const [addressesError, setAddressesError] = useState('');
+    const [addressForm, setAddressForm] = useState({
+        label: 'Home',
+        recipientName: '',
+        phoneNumber: '',
+        addressLine: '',
+        defaultAddress: false,
+    });
 
     const displayName = user?.name || 'Guest';
     const email = user?.email || 'guest@example.com';
@@ -80,9 +90,83 @@ export default function Profile() {
         }
     }, [isArtisan, user]);
 
+    useEffect(() => {
+        const loadAddresses = async () => {
+            setAddressesLoading(true);
+            setAddressesError('');
+            try {
+                const response = await addressesAPI.getAddresses();
+                setAddresses(response.data.data || []);
+            } catch (err) {
+                setAddressesError(err.response?.data?.message || err.message || 'Unable to load saved addresses');
+            } finally {
+                setAddressesLoading(false);
+            }
+        };
+
+        if (user && !isArtisan) {
+            loadAddresses();
+        } else {
+            setAddressesLoading(false);
+        }
+    }, [isArtisan, user]);
+
     const handleLogout = () => {
         logout();
         navigate('/login');
+    };
+
+    const updateAddressForm = (field, value) => {
+        setAddressForm((current) => ({ ...current, [field]: value }));
+    };
+
+    const saveAddress = async (event) => {
+        event.preventDefault();
+        setAddressesError('');
+        try {
+            const response = await addressesAPI.createAddress(addressForm);
+            const savedAddress = response.data.data;
+            setAddresses((current) => {
+                const next = addressForm.defaultAddress
+                    ? current.map((address) => ({ ...address, defaultAddress: false }))
+                    : current;
+                return [savedAddress, ...next];
+            });
+            setAddressForm({
+                label: 'Home',
+                recipientName: '',
+                phoneNumber: '',
+                addressLine: '',
+                defaultAddress: false,
+            });
+        } catch (err) {
+            setAddressesError(err.response?.data?.message || err.message || 'Unable to save address');
+        }
+    };
+
+    const makeDefaultAddress = async (address) => {
+        setAddressesError('');
+        try {
+            const response = await addressesAPI.updateAddress(address.id, { ...address, defaultAddress: true });
+            const updatedAddress = response.data.data;
+            setAddresses((current) => current.map((item) => (
+                item.id === updatedAddress.id
+                    ? updatedAddress
+                    : { ...item, defaultAddress: false }
+            )));
+        } catch (err) {
+            setAddressesError(err.response?.data?.message || err.message || 'Unable to update address');
+        }
+    };
+
+    const removeAddress = async (id) => {
+        setAddressesError('');
+        try {
+            await addressesAPI.deleteAddress(id);
+            setAddresses((current) => current.filter((address) => address.id !== id));
+        } catch (err) {
+            setAddressesError(err.response?.data?.message || err.message || 'Unable to remove address');
+        }
     };
 
     return (
@@ -173,6 +257,99 @@ export default function Profile() {
                         </section>
 
                         {/* ─── FORGET-ME-NOT / IMPORTANT DATES ─── */}
+                        {!isArtisan && (
+                            <section id="saved-addresses">
+                                <div className="flex items-center justify-between mb-6 border-b border-stone-200 pb-4">
+                                    <h3 className="text-2xl font-serif text-stone-900">Saved Addresses</h3>
+                                    <span className="text-xs uppercase tracking-widest text-stone-400">{addresses.length} saved</span>
+                                </div>
+
+                                {addressesError && (
+                                    <div className="mb-4 border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 flex items-center gap-2">
+                                        <AlertCircle size={16} /> {addressesError}
+                                    </div>
+                                )}
+
+                                {addressesLoading ? (
+                                    <div className="h-32 bg-stone-100 animate-pulse" />
+                                ) : (
+                                    <div className="space-y-4">
+                                        {addresses.map((address) => (
+                                            <div key={address.id} className="border border-stone-200 bg-white p-5">
+                                                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                                                    <div className="flex gap-4">
+                                                        <div className="h-11 w-11 border border-stone-200 bg-stone-50 flex items-center justify-center text-stone-500 shrink-0">
+                                                            <MapPin size={19} strokeWidth={1.5} />
+                                                        </div>
+                                                        <div>
+                                                            <div className="flex flex-wrap items-center gap-2">
+                                                                <h4 className="font-serif text-xl text-stone-950">{address.label}</h4>
+                                                                {address.defaultAddress && (
+                                                                    <span className="border border-green-200 bg-green-50 px-2 py-0.5 text-[10px] uppercase tracking-wide text-green-800">Default</span>
+                                                                )}
+                                                            </div>
+                                                            <p className="mt-1 text-sm font-medium text-stone-800">{address.recipientName}</p>
+                                                            <p className="mt-1 text-sm text-stone-500 leading-relaxed">{address.addressLine}</p>
+                                                            {address.phoneNumber && <p className="mt-1 text-xs text-stone-400">{address.phoneNumber}</p>}
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex gap-2 sm:justify-end">
+                                                        {!address.defaultAddress && (
+                                                            <button onClick={() => makeDefaultAddress(address)} className="h-9 px-3 border border-stone-200 text-xs font-medium text-stone-600 hover:border-stone-900 hover:text-stone-900 inline-flex items-center gap-2">
+                                                                <Star size={14} /> Default
+                                                            </button>
+                                                        )}
+                                                        <button onClick={() => removeAddress(address.id)} className="h-9 px-3 border border-stone-200 text-xs font-medium text-stone-600 hover:border-red-200 hover:bg-red-50 hover:text-red-700 inline-flex items-center gap-2">
+                                                            <Trash2 size={14} /> Remove
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+
+                                        {addresses.length === 0 && (
+                                            <div className="border border-dashed border-stone-300 bg-stone-50 px-6 py-8 text-center">
+                                                <MapPin className="mx-auto mb-3 text-stone-400" size={24} />
+                                                <h4 className="font-serif text-xl text-stone-900">No saved addresses yet</h4>
+                                                <p className="mt-1 text-sm text-stone-500">Save a recipient here or during checkout.</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                <form onSubmit={saveAddress} className="mt-5 border border-stone-200 bg-white p-5">
+                                    <h4 className="font-serif text-xl text-stone-900 mb-4">Add Recipient</h4>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <label className="block">
+                                            <span className="text-xs uppercase tracking-wider text-stone-400 font-medium">Label</span>
+                                            <input required value={addressForm.label} onChange={(event) => updateAddressForm('label', event.target.value)} className="mt-2 w-full bg-stone-50 border border-stone-200 px-3 py-2 text-stone-900 outline-none focus:border-stone-900" />
+                                        </label>
+                                        <label className="block">
+                                            <span className="text-xs uppercase tracking-wider text-stone-400 font-medium">Recipient</span>
+                                            <input required value={addressForm.recipientName} onChange={(event) => updateAddressForm('recipientName', event.target.value)} className="mt-2 w-full bg-stone-50 border border-stone-200 px-3 py-2 text-stone-900 outline-none focus:border-stone-900" />
+                                        </label>
+                                        <label className="block">
+                                            <span className="text-xs uppercase tracking-wider text-stone-400 font-medium">Phone Optional</span>
+                                            <input value={addressForm.phoneNumber} onChange={(event) => updateAddressForm('phoneNumber', event.target.value)} className="mt-2 w-full bg-stone-50 border border-stone-200 px-3 py-2 text-stone-900 outline-none focus:border-stone-900" />
+                                        </label>
+                                        <label className="flex items-end gap-3 pb-2 text-sm text-stone-700">
+                                            <input type="checkbox" checked={addressForm.defaultAddress} onChange={(event) => updateAddressForm('defaultAddress', event.target.checked)} className="h-4 w-4 accent-stone-900" />
+                                            Make default
+                                        </label>
+                                    </div>
+                                    <label className="mt-4 block">
+                                        <span className="text-xs uppercase tracking-wider text-stone-400 font-medium">Delivery Address</span>
+                                        <textarea required rows={3} value={addressForm.addressLine} onChange={(event) => updateAddressForm('addressLine', event.target.value)} className="mt-2 w-full bg-stone-50 border border-stone-200 px-3 py-2 text-stone-900 outline-none focus:border-stone-900 resize-none" />
+                                    </label>
+                                    <div className="mt-4 flex justify-end">
+                                        <button className="h-10 px-5 bg-stone-900 text-white text-sm font-medium hover:bg-stone-800 inline-flex items-center gap-2">
+                                            <Plus size={15} /> Save Address
+                                        </button>
+                                    </div>
+                                </form>
+                            </section>
+                        )}
+
                         <section>
                             <div className="flex items-center justify-between mb-6 border-b border-stone-200 pb-4">
                                 <div className="flex items-center gap-3">
@@ -185,7 +362,6 @@ export default function Profile() {
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                {/* Date Card 1 */}
                                 <div className="bg-white border border-stone-200 p-6 relative group hover:border-stone-400 transition-all">
                                     <div className="absolute top-4 right-4 text-stone-300 group-hover:text-stone-900 transition-colors">
                                         <Shield size={16} />
@@ -193,14 +369,12 @@ export default function Profile() {
                                     <p className="text-xs uppercase tracking-widest text-stone-500 mb-2">Upcoming</p>
                                     <h4 className="text-xl font-serif text-stone-900 mb-1">My Wife's Birthday</h4>
                                     <p className="text-sm text-stone-600 mb-4">February 14, 2026</p>
-
                                     <div className="flex items-center gap-2 my-4">
                                         <div className="h-1.5 flex-1 bg-stone-100 rounded-full overflow-hidden">
                                             <div className="h-full bg-stone-900 w-3/4"></div>
                                         </div>
                                         <span className="text-[10px] text-stone-500 font-medium whitespace-nowrap">3 Days Left</span>
                                     </div>
-
                                     <div className="flex items-center gap-2">
                                         <label className="custom-checkbox flex items-center gap-2 cursor-pointer">
                                             <div className="w-8 h-4 bg-stone-900 rounded-full relative">
@@ -211,7 +385,6 @@ export default function Profile() {
                                     </div>
                                 </div>
 
-                                {/* Date Card 2 */}
                                 <div className="bg-stone-50 border border-stone-200 p-6 flex flex-col justify-center items-center text-center hover:bg-white transition-colors cursor-pointer border-dashed">
                                     <div className="w-10 h-10 bg-stone-200 rounded-full flex items-center justify-center text-stone-500 mb-3">
                                         <Plus size={20} />
@@ -374,7 +547,7 @@ export default function Profile() {
                                 <h4 className="font-serif text-lg text-stone-900 mb-4">Account Settings</h4>
                                 <ul className="space-y-3 text-sm">
                                     <li><button className="text-stone-600 hover:text-stone-900 transition-colors w-full text-left">Payment Methods</button></li>
-                                    <li><button className="text-stone-600 hover:text-stone-900 transition-colors w-full text-left">Saved Addresses</button></li>
+                                    <li><a href="#saved-addresses" className="text-stone-600 hover:text-stone-900 transition-colors w-full text-left block">Saved Addresses</a></li>
                                     <li><button className="text-stone-600 hover:text-stone-900 transition-colors w-full text-left">Notification Preferences</button></li>
                                     <li><button className="text-stone-600 hover:text-stone-900 transition-colors w-full text-left">Privacy & Security</button></li>
                                 </ul>

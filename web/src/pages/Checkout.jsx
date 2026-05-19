@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Calendar, CreditCard, Leaf, MessageSquare, MapPin, User } from 'lucide-react';
-import { cartAPI, ordersAPI } from '../services/api';
+import { ArrowLeft, Calendar, Check, CreditCard, Leaf, MessageSquare, MapPin, Plus, User } from 'lucide-react';
+import { addressesAPI, cartAPI, ordersAPI } from '../services/api';
 
 const formatPeso = (value) => `₱${Number(value || 0).toLocaleString('en-PH', {
     minimumFractionDigits: 2,
@@ -24,9 +24,14 @@ function paymentLabel(value) {
 export default function Checkout() {
     const navigate = useNavigate();
     const [cart, setCart] = useState({ items: [], subtotal: 0 });
+    const [addresses, setAddresses] = useState([]);
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState('');
+    const [selectedAddressId, setSelectedAddressId] = useState('');
+    const [saveAddress, setSaveAddress] = useState(false);
+    const [addressLabel, setAddressLabel] = useState('Home');
+    const [phoneNumber, setPhoneNumber] = useState('');
     const [formData, setFormData] = useState({
         recipientName: '',
         recipientAddress: '',
@@ -37,13 +42,23 @@ export default function Checkout() {
     });
 
     useEffect(() => {
-        const loadCart = async () => {
+        const loadCheckout = async () => {
             setLoading(true);
             setError('');
 
             try {
-                const response = await cartAPI.getCart();
-                setCart(response.data.data || { items: [], subtotal: 0 });
+                const [cartResponse, addressesResponse] = await Promise.all([
+                    cartAPI.getCart(),
+                    addressesAPI.getAddresses(),
+                ]);
+                const savedAddresses = addressesResponse.data.data || [];
+                setCart(cartResponse.data.data || { items: [], subtotal: 0 });
+                setAddresses(savedAddresses);
+
+                const defaultAddress = savedAddresses.find((address) => address.defaultAddress);
+                if (defaultAddress) {
+                    applyAddress(defaultAddress);
+                }
             } catch (err) {
                 setError(err.response?.data?.message || err.message || 'Unable to load cart');
             } finally {
@@ -51,7 +66,7 @@ export default function Checkout() {
             }
         };
 
-        loadCart();
+        loadCheckout();
     }, []);
 
     const cardCharacters = formData.cardMessage.length;
@@ -59,6 +74,21 @@ export default function Checkout() {
 
     const updateField = (field, value) => {
         setFormData((current) => ({ ...current, [field]: value }));
+        if (field === 'recipientName' || field === 'recipientAddress') {
+            setSelectedAddressId('');
+        }
+    };
+
+    const applyAddress = (address) => {
+        setSelectedAddressId(String(address.id));
+        setSaveAddress(false);
+        setAddressLabel(address.label || 'Home');
+        setPhoneNumber(address.phoneNumber || '');
+        setFormData((current) => ({
+            ...current,
+            recipientName: address.recipientName,
+            recipientAddress: address.addressLine,
+        }));
     };
 
     const handleSubmit = async (event) => {
@@ -67,6 +97,16 @@ export default function Checkout() {
         setError('');
 
         try {
+            if (saveAddress && !selectedAddressId) {
+                const response = await addressesAPI.createAddress({
+                    label: addressLabel || 'Saved address',
+                    recipientName: formData.recipientName,
+                    phoneNumber,
+                    addressLine: formData.recipientAddress,
+                    defaultAddress: addresses.length === 0,
+                });
+                setAddresses((current) => [response.data.data, ...current]);
+            }
             const response = await ordersAPI.createOrder(formData);
             navigate('/checkout/confirmation', { state: { order: response.data.data } });
         } catch (err) {
@@ -124,6 +164,25 @@ export default function Checkout() {
                                     <User size={18} strokeWidth={1.5} className="text-stone-500" />
                                     <h2 className="text-3xl font-serif text-stone-900">Recipient</h2>
                                 </div>
+                                {addresses.length > 0 && (
+                                    <div className="mb-6 grid grid-cols-1 md:grid-cols-2 gap-3">
+                                        {addresses.map((address) => (
+                                            <button
+                                                key={address.id}
+                                                type="button"
+                                                onClick={() => applyAddress(address)}
+                                                className={`text-left border p-4 transition-colors ${selectedAddressId === String(address.id) ? 'border-stone-900 bg-stone-900 text-white' : 'border-stone-200 bg-[#FDFCF8] text-stone-700 hover:border-stone-500'}`}
+                                            >
+                                                <span className="flex items-center justify-between gap-3">
+                                                    <span className="text-sm font-semibold">{address.label}</span>
+                                                    {address.defaultAddress && <span className="text-[10px] uppercase tracking-wide">Default</span>}
+                                                </span>
+                                                <span className={`mt-2 block text-sm ${selectedAddressId === String(address.id) ? 'text-white/80' : 'text-stone-500'}`}>{address.recipientName}</span>
+                                                <span className={`mt-1 block text-xs leading-relaxed ${selectedAddressId === String(address.id) ? 'text-white/70' : 'text-stone-500'}`}>{address.addressLine}</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <label className="block">
                                         <span className="text-xs uppercase tracking-wider text-stone-500 mb-2 block">Recipient Name</span>
@@ -161,6 +220,40 @@ export default function Checkout() {
                                     placeholder="Street, barangay, city, landmark"
                                     className="w-full border border-stone-200 bg-[#FDFCF8] px-4 py-3 text-sm outline-none focus:border-stone-900 resize-none"
                                 />
+                                {!selectedAddressId && (
+                                    <div className="mt-4 border border-stone-200 bg-[#FDFCF8] p-4">
+                                        <label className="flex items-center gap-3 text-sm font-medium text-stone-800">
+                                            <input
+                                                type="checkbox"
+                                                checked={saveAddress}
+                                                onChange={(event) => setSaveAddress(event.target.checked)}
+                                                className="h-4 w-4 accent-stone-900"
+                                            />
+                                            Save this recipient for next time
+                                        </label>
+                                        {saveAddress && (
+                                            <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                <label className="block">
+                                                    <span className="text-xs uppercase tracking-wider text-stone-500 mb-2 block">Address Label</span>
+                                                    <input
+                                                        value={addressLabel}
+                                                        onChange={(event) => setAddressLabel(event.target.value)}
+                                                        className="w-full h-11 border border-stone-200 bg-white px-3 text-sm outline-none focus:border-stone-900"
+                                                    />
+                                                </label>
+                                                <label className="block">
+                                                    <span className="text-xs uppercase tracking-wider text-stone-500 mb-2 block">Phone Optional</span>
+                                                    <input
+                                                        value={phoneNumber}
+                                                        onChange={(event) => setPhoneNumber(event.target.value)}
+                                                        placeholder="0917 123 4567"
+                                                        className="w-full h-11 border border-stone-200 bg-white px-3 text-sm outline-none focus:border-stone-900"
+                                                    />
+                                                </label>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
                             </div>
 
                             <div>
@@ -256,6 +349,13 @@ export default function Checkout() {
                             <div className="border-t border-stone-100 mt-5 pt-5 flex justify-between items-center">
                                 <span className="text-stone-500">Total</span>
                                 <span className="text-3xl font-serif text-stone-900">{formatPeso(cart.subtotal)}</span>
+                            </div>
+                            <div className="mt-5 border border-stone-100 bg-[#FDFCF8] p-4 text-xs text-stone-500 leading-relaxed">
+                                {selectedAddressId ? (
+                                    <span className="inline-flex items-start gap-2"><Check size={14} className="mt-0.5 text-green-700" /> Saved recipient selected for this delivery.</span>
+                                ) : (
+                                    <span className="inline-flex items-start gap-2"><Plus size={14} className="mt-0.5" /> New recipient details can be saved before placing the order.</span>
+                                )}
                             </div>
                             <button
                                 type="submit"
