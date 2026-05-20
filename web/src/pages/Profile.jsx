@@ -66,6 +66,22 @@ function normalizeSavedDate(savedDate) {
 }
 
 const RECENT_ORDER_LIMIT = 3;
+const INACTIVE_ORDER_STATUSES = ['DELIVERED', 'COMPLETED', 'CANCELLED'];
+
+function isActiveOrder(order) {
+    return !INACTIVE_ORDER_STATUSES.includes(order?.status);
+}
+
+function sortActiveOrders(a, b) {
+    if (!a.deliveryDate && !b.deliveryDate) return Number(b.id || 0) - Number(a.id || 0);
+    if (!a.deliveryDate) return 1;
+    if (!b.deliveryDate) return -1;
+    return new Date(`${a.deliveryDate}T00:00:00`) - new Date(`${b.deliveryDate}T00:00:00`);
+}
+
+function primaryOrderItem(order) {
+    return order?.items?.[0] || null;
+}
 
 export default function Profile() {
     const { user, logout } = useAuth();
@@ -101,10 +117,17 @@ export default function Profile() {
 
     const displayName = user?.name || 'Guest';
     const email = user?.email || 'guest@example.com';
-    const role = user?.role || 'Customer';
     const initials = displayName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
     const isArtisan = user?.role === 'artisan' || user?.role === 'ARTISAN' || user?.role === 'ROLE_FLORIST';
     const recentOrders = orders.slice(0, RECENT_ORDER_LIMIT);
+    const currentGift = orders.filter(isActiveOrder).sort(sortActiveOrders)[0] || null;
+    const reminderCountText = savedDatesLoading
+        ? 'Loading reminders'
+        : savedDates.length === 1
+            ? '1 saved reminder'
+            : savedDates.length > 1
+                ? `${savedDates.length} saved reminders`
+                : 'No reminders yet';
 
     useEffect(() => {
         const loadOrders = async () => {
@@ -317,24 +340,22 @@ export default function Profile() {
                 </div>
             </nav>
 
-            <main className="pt-32 pb-24 max-w-5xl mx-auto px-6">
+            <main className="pt-28 pb-20 max-w-5xl mx-auto px-5 sm:px-6">
 
                 {/* ─── HEADER ─── */}
-                <header className="mb-16 text-center">
-                    <div className="w-24 h-24 mx-auto bg-stone-100 rounded-full flex items-center justify-center text-3xl font-serif italic text-stone-800 mb-6 border border-stone-200">
+                <header className="mb-10 text-center">
+                    <div className="w-20 h-20 mx-auto bg-stone-100 rounded-full flex items-center justify-center text-2xl font-serif italic text-stone-800 mb-5 border border-stone-200">
                         {initials}
                     </div>
-                    <h1 className="text-4xl md:text-5xl font-serif text-stone-900 mb-2">
+                    <h1 className="text-3xl md:text-4xl font-serif text-stone-900 mb-2">
                         {displayName}
                     </h1>
-                    <p className="text-stone-500 font-light tracking-wide uppercase text-xs">
-                        {role} • Member since 2026
-                    </p>
+                    <p className="text-sm text-stone-500">{email}</p>
                 </header>
 
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                     {/* ─── LEFT: ACCOUNT DETAILS ─── */}
-                    <div className="lg:col-span-2 space-y-12">
+                    <div className="lg:col-span-2 space-y-8">
 
                         {/* Personal Information */}
                         <section>
@@ -481,87 +502,54 @@ export default function Profile() {
 
                         {!isArtisan && (
                             <section>
-                                <div className="mb-6 flex flex-col gap-4 border-b border-stone-200 pb-4 sm:flex-row sm:items-end sm:justify-between">
+                                <div className="mb-4 flex items-center justify-between border-b border-stone-200 pb-4">
                                     <div>
-                                        <div className="flex flex-wrap items-center gap-3">
-                                            <h3 className="text-2xl font-serif text-stone-900">Forget-Me-Not</h3>
-                                            <span className="border border-stone-200 bg-white px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-stone-600">Reminder ready</span>
-                                        </div>
-                                        <p className="mt-2 max-w-2xl text-sm leading-relaxed text-stone-500">
-                                            Save birthdays, anniversaries, and special dates. Petal will remind you before they arrive.
-                                        </p>
+                                        <h3 className="text-2xl font-serif text-stone-900">Current Gift</h3>
+                                        <p className="mt-1 text-sm text-stone-500">Your next active bouquet delivery.</p>
                                     </div>
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            setSavedDatesError('');
-                                            setSavedDatesSuccess('');
-                                            setShowSavedDateModal(true);
-                                        }}
-                                        className="inline-flex min-h-11 items-center justify-center gap-2 border border-stone-900 px-4 text-xs font-medium uppercase tracking-widest text-stone-900 transition-colors hover:bg-stone-900 hover:text-white"
-                                    >
-                                        <Plus size={14} /> Add Date
-                                    </button>
                                 </div>
 
-                                {savedDatesSuccess && (
-                                    <div className="mb-4 flex items-start gap-2 border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
-                                        <CheckCircle2 size={16} className="mt-0.5 shrink-0" /> {savedDatesSuccess}
-                                    </div>
-                                )}
-
-                                {savedDatesError && (
-                                    <div className="mb-4 flex items-start gap-2 border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                                        <AlertCircle size={16} className="mt-0.5 shrink-0" /> {savedDatesError}
-                                    </div>
-                                )}
-
-                                {savedDatesLoading ? (
-                                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                                        {[1, 2].map((item) => (
-                                            <div key={item} className="h-40 animate-pulse border border-stone-200 bg-stone-100" />
-                                        ))}
-                                    </div>
-                                ) : savedDates.length ? (
-                                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                                        {savedDates.map((savedDate) => (
-                                            <div key={savedDate.id || `${savedDate.label}-${savedDate.eventDate}`} className="group border border-stone-200 bg-white p-5 transition-colors hover:border-stone-400">
-                                                <div className="flex items-start justify-between gap-4">
-                                                    <div className="flex min-w-0 gap-4">
-                                                        <div className="flex h-11 w-11 shrink-0 items-center justify-center border border-stone-200 bg-[#FDFCF8] text-stone-500">
-                                                            <CalendarDays size={19} strokeWidth={1.5} />
-                                                        </div>
-                                                        <div className="min-w-0">
-                                                            <p className="text-xs uppercase tracking-[0.18em] text-stone-400">Important date</p>
-                                                            <h4 className="mt-1 font-serif text-xl leading-tight text-stone-950">{savedDate.label}</h4>
-                                                            <p className="mt-1 text-sm text-stone-500">{formatSavedDate(savedDate.eventDate)}</p>
-                                                        </div>
+                                {ordersLoading ? (
+                                    <div className="h-28 bg-stone-100 animate-pulse" />
+                                ) : currentGift ? (
+                                    <Link to={`/orders/${currentGift.id}`} className="group block border border-stone-200 bg-white p-4 transition-colors hover:border-stone-400 hover:bg-[#FFFDF9] sm:p-5">
+                                        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                                            <div className="flex gap-4 min-w-0">
+                                                {primaryOrderItem(currentGift)?.imageUrl ? (
+                                                    <img
+                                                        src={primaryOrderItem(currentGift).imageUrl}
+                                                        alt={primaryOrderItem(currentGift).productName || currentGift.itemSummary}
+                                                        className="h-16 w-14 shrink-0 border border-stone-200 bg-stone-100 object-cover"
+                                                    />
+                                                ) : (
+                                                    <div className="h-16 w-14 bg-[#F7F1EA] border border-stone-200 flex items-center justify-center text-stone-500 shrink-0">
+                                                        <Truck size={21} strokeWidth={1.5} />
                                                     </div>
-                                                    <span className={`shrink-0 border px-2.5 py-1 text-[10px] font-medium uppercase tracking-wide ${savedDate.recurring ? 'border-green-200 bg-green-50 text-green-800' : 'border-stone-200 bg-stone-50 text-stone-600'}`}>
-                                                        {savedDate.recurring ? 'Recurring' : 'One-time'}
-                                                    </span>
-                                                </div>
-                                                <div className="mt-5 flex items-center gap-2 border-t border-stone-100 pt-4 text-xs leading-relaxed text-stone-500">
-                                                    <Bell size={15} strokeWidth={1.5} className="shrink-0 text-stone-400" />
-                                                    Reminder checks run 3 days before this date.
+                                                )}
+                                                <div className="min-w-0">
+                                                    <p className="text-xs uppercase tracking-[0.18em] text-stone-400">{currentGift.orderNumber}</p>
+                                                    <h4 className="mt-1 font-serif text-xl text-stone-950">{primaryOrderItem(currentGift)?.productName || currentGift.itemSummary}</h4>
+                                                    <p className="mt-1 text-sm text-stone-500">{deliveryLabel(currentGift)}</p>
+                                                    <p className="mt-1 text-xs text-stone-400">Deliver to {currentGift.recipientName}</p>
                                                 </div>
                                             </div>
-                                        ))}
-                                    </div>
+                                            <div className="flex items-center justify-between gap-4 sm:block sm:text-right">
+                                                <span className={`inline-flex border px-2.5 py-1 text-xs font-medium leading-none ${statusClass(currentGift.status)}`}>
+                                                    {statusLabel(currentGift.status)}
+                                                </span>
+                                                <p className="text-xs font-medium uppercase tracking-widest text-stone-500 transition-colors group-hover:text-stone-900 sm:mt-4">View details</p>
+                                            </div>
+                                        </div>
+                                    </Link>
                                 ) : (
-                                    <div className="border border-dashed border-stone-300 bg-stone-50 px-6 py-10 text-center">
-                                        <CalendarDays className="mx-auto mb-3 text-stone-400" size={28} strokeWidth={1.5} />
-                                        <h4 className="font-serif text-xl text-stone-900">No important dates yet</h4>
-                                        <p className="mx-auto mt-1 max-w-md text-sm leading-relaxed text-stone-500">
-                                            Add birthdays, anniversaries, and moments you don't want to miss.
-                                        </p>
-                                        <button
-                                            type="button"
-                                            onClick={() => setShowSavedDateModal(true)}
-                                            className="mt-5 inline-flex min-h-11 items-center justify-center gap-2 bg-stone-900 px-5 text-sm font-medium text-white transition-colors hover:bg-stone-800"
-                                        >
-                                            <Plus size={15} /> Add first date
-                                        </button>
+                                    <div className="border border-dashed border-stone-300 bg-stone-50 px-5 py-5">
+                                        <div className="flex items-start gap-3">
+                                            <PackageCheck className="mt-0.5 shrink-0 text-stone-400" size={20} strokeWidth={1.5} />
+                                            <div>
+                                                <h4 className="font-serif text-lg text-stone-900">No active gift right now</h4>
+                                                <p className="mt-1 text-sm leading-relaxed text-stone-500">When a florist is preparing or delivering a bouquet, it will appear here.</p>
+                                            </div>
+                                        </div>
                                     </div>
                                 )}
                             </section>
@@ -569,17 +557,17 @@ export default function Profile() {
 
                         {!isArtisan && (
                             <section>
-                                <div className="flex items-center justify-between mb-6 border-b border-stone-200 pb-4">
+                                <div className="flex flex-col gap-3 mb-5 border-b border-stone-200 pb-4 sm:flex-row sm:items-end sm:justify-between">
                                     <div>
-                                        <h3 className="text-2xl font-serif text-stone-900">Recent Purchases</h3>
+                                        <h3 className="text-2xl font-serif text-stone-900">Recent Gifts</h3>
                                         <p className="mt-1 text-sm text-stone-500">
                                             {orders.length
-                                                ? `Showing latest ${Math.min(orders.length, RECENT_ORDER_LIMIT)} of ${orders.length} purchase${orders.length === 1 ? '' : 's'}`
-                                                : 'Your latest purchases will appear here after checkout.'}
+                                                ? `Showing latest ${Math.min(orders.length, RECENT_ORDER_LIMIT)} of ${orders.length} gift${orders.length === 1 ? '' : 's'}`
+                                                : 'Your latest gifts will appear here after checkout.'}
                                         </p>
                                     </div>
                                     <Link to="/purchase-history" className="inline-flex min-h-11 items-center justify-center border border-stone-900 px-4 text-xs font-medium uppercase tracking-widest text-stone-900 transition-colors hover:bg-stone-900 hover:text-white">
-                                        View purchase history
+                                        View Purchase History
                                     </Link>
                                 </div>
 
@@ -596,12 +584,12 @@ export default function Profile() {
                                         ))}
                                     </div>
                                 ) : recentOrders.length ? (
-                                    <div className="space-y-4">
+                                    <div className="space-y-3">
                                         {recentOrders.map((order) => (
-                                            <Link to={`/orders/${order.id}`} key={order.id} className="block border border-stone-200 bg-white p-4 sm:p-5 hover:border-stone-300 transition-colors">
+                                            <Link to={`/orders/${order.id}`} key={order.id} className="group block border border-stone-200 bg-white p-4 transition-colors hover:border-stone-400 hover:bg-[#FFFDF9] sm:p-5">
                                                 <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                                                     <div className="flex gap-4 min-w-0">
-                                                        <div className="w-14 h-14 bg-stone-100 border border-stone-200 flex items-center justify-center text-stone-500 shrink-0">
+                                                        <div className="w-14 h-14 bg-[#F7F1EA] border border-stone-200 flex items-center justify-center text-stone-500 shrink-0">
                                                             {order.status === 'COMPLETED' ? <CheckCircle2 size={22} /> : <Truck size={22} />}
                                                         </div>
                                                         <div className="min-w-0">
@@ -612,11 +600,11 @@ export default function Profile() {
                                                             <p className="mt-1 text-xs text-stone-400">Payment: {paymentLabel(order.paymentMethod)}</p>
                                                         </div>
                                                     </div>
-                                                    <div className="sm:text-right">
-                                                        <span className={`inline-flex border px-2.5 py-1 text-xs font-medium ${statusClass(order.status)}`}>
+                                                    <div className="flex items-center justify-between gap-4 sm:block sm:text-right">
+                                                        <span className={`inline-flex border px-2.5 py-1 text-xs font-medium leading-none ${statusClass(order.status)}`}>
                                                             {statusLabel(order.status)}
                                                         </span>
-                                                        <p className="mt-2 font-semibold text-stone-950">{currency(order.totalAmount)}</p>
+                                                        <p className="font-semibold tabular-nums text-stone-950 sm:mt-2">{currency(order.totalAmount)}</p>
                                                     </div>
                                                 </div>
 
@@ -632,18 +620,21 @@ export default function Profile() {
                                                         </div>
                                                     ))}
                                                 </div>
+                                                <div className="mt-4 flex justify-end border-t border-stone-100 pt-3">
+                                                    <span className="text-xs font-medium uppercase tracking-widest text-stone-500 transition-colors group-hover:text-stone-900">View details</span>
+                                                </div>
                                             </Link>
                                         ))}
                                         {orders.length > RECENT_ORDER_LIMIT && (
                                             <Link to="/purchase-history" className="flex min-h-12 items-center justify-center border border-dashed border-stone-300 bg-stone-50 px-4 text-sm font-medium text-stone-700 transition-colors hover:border-stone-900 hover:bg-white hover:text-stone-950">
-                                                View all {orders.length} purchases
+                                                View all {orders.length} gifts
                                             </Link>
                                         )}
                                     </div>
                                 ) : (
                                     <div className="border border-dashed border-stone-300 bg-stone-50 px-6 py-10 text-center">
                                         <PackageCheck className="mx-auto mb-3 text-stone-400" size={26} />
-                                        <h4 className="font-serif text-xl text-stone-900">No orders yet</h4>
+                                        <h4 className="font-serif text-xl text-stone-900">No gifts yet</h4>
                                         <p className="mt-1 text-sm text-stone-500">Your checkout orders and florist status updates will appear here.</p>
                                         <Link to="/dashboard" className="mt-5 inline-flex h-10 items-center justify-center bg-stone-900 px-5 text-sm font-semibold text-white hover:bg-stone-800">
                                             Browse flowers
@@ -709,14 +700,14 @@ export default function Profile() {
 
                     {/* ─── RIGHT: MEMBERSHIP CARD ─── */}
                     <div className="lg:col-span-1">
-                        <div className="sticky top-32 space-y-8">
-                            <div id="saved-addresses" className="bg-white p-6 border border-stone-200 shadow-sm">
+                        <div className="sticky top-28 space-y-5">
+                            <div id="saved-addresses" className="bg-white p-5 border border-stone-200 shadow-sm">
                                 <div className="flex items-start justify-between gap-4 border-b border-stone-100 pb-4">
                                     <div>
                                         <p className="text-xs uppercase tracking-widest text-stone-500">Saved Addresses</p>
                                         <h2 className="mt-1 text-2xl font-serif text-stone-900">Recipient Book</h2>
                                     </div>
-                                    <span className="border border-stone-200 px-2 py-1 text-[10px] uppercase tracking-wider text-stone-500">{addresses.length} saved</span>
+                                    <span className="border border-stone-200 bg-[#FDFCF8] px-2 py-1 text-[10px] uppercase tracking-wider text-stone-500">{addresses.length} saved</span>
                                 </div>
 
                                 {addressesError && (
@@ -730,7 +721,7 @@ export default function Profile() {
                                 ) : (
                                     <div className="mt-4 space-y-3">
                                         {(showRecipientBook ? addresses : addresses.slice(0, 1)).map((address) => (
-                                            <div key={address.id} className="border border-stone-200 bg-[#FDFCF8] p-4">
+                                            <div key={address.id} className="border border-stone-200 bg-[#FDFCF8] p-4 transition-colors hover:border-stone-300">
                                                 <div className="flex items-start gap-3">
                                                     <div className="h-9 w-9 border border-stone-200 bg-white flex items-center justify-center text-stone-500 shrink-0">
                                                         <MapPin size={16} strokeWidth={1.5} />
@@ -739,7 +730,7 @@ export default function Profile() {
                                                         <div className="flex flex-wrap items-center gap-2">
                                                             <h4 className="font-serif text-lg leading-tight text-stone-950">{address.label}</h4>
                                                             {address.defaultAddress && (
-                                                                <span className="border border-green-200 bg-green-50 px-2 py-0.5 text-[10px] uppercase tracking-wide text-green-800">Default</span>
+                                                                <span className="border border-green-200 bg-green-50 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-green-800">Default</span>
                                                             )}
                                                         </div>
                                                         <p className="mt-1 text-sm font-medium text-stone-800">{address.recipientName}</p>
@@ -748,7 +739,7 @@ export default function Profile() {
                                                     </div>
                                                 </div>
                                                 {showRecipientBook && (
-                                                    <div className="mt-3 flex gap-2">
+                                                    <div className="mt-3 flex flex-wrap gap-2 border-t border-stone-100 pt-3">
                                                         {!address.defaultAddress && (
                                                             <button type="button" onClick={() => makeDefaultAddress(address)} className="min-h-9 px-3 border border-stone-200 text-xs font-medium text-stone-600 hover:border-stone-900 hover:text-stone-900 inline-flex items-center gap-2">
                                                                 <Star size={14} /> Default
@@ -766,7 +757,7 @@ export default function Profile() {
                                             <div className="border border-dashed border-stone-300 bg-stone-50 px-4 py-6 text-center">
                                                 <MapPin className="mx-auto mb-3 text-stone-400" size={24} />
                                                 <h4 className="font-serif text-lg text-stone-900">No saved addresses yet</h4>
-                                                <p className="mt-1 text-sm text-stone-500">Open recipient management to add one.</p>
+                                                <p className="mt-1 text-sm text-stone-500">Save frequent recipients for faster checkout.</p>
                                             </div>
                                         )}
                                     </div>
@@ -777,7 +768,7 @@ export default function Profile() {
                                     onClick={() => setShowRecipientBook((current) => !current)}
                                     className="mt-4 min-h-11 w-full border border-stone-900 px-4 text-sm font-medium text-stone-900 hover:bg-stone-900 hover:text-white transition-colors inline-flex items-center justify-center gap-2"
                                 >
-                                    {showRecipientBook ? 'Hide recipient manager' : addresses.length ? 'Manage recipients' : 'Show recipient book'}
+                                    {showRecipientBook ? 'Hide recipient manager' : 'Manage recipients'}
                                 </button>
 
                                 <button
@@ -789,13 +780,54 @@ export default function Profile() {
                                 </button>
                             </div>
 
-                            <div className="bg-stone-50 p-6 border border-stone-200">
-                                <h4 className="font-serif text-lg text-stone-900 mb-4">Account Settings</h4>
-                                <ul className="space-y-3 text-sm">
-                                    <li><button className="text-stone-600 hover:text-stone-900 transition-colors w-full text-left">Payment Methods</button></li>
-                                    <li><a href="#saved-addresses" className="text-stone-600 hover:text-stone-900 transition-colors w-full text-left block">Saved Addresses</a></li>
-                                    <li><button className="text-stone-600 hover:text-stone-900 transition-colors w-full text-left">Notification Preferences</button></li>
-                                    <li><button className="text-stone-600 hover:text-stone-900 transition-colors w-full text-left">Privacy & Security</button></li>
+                            {!isArtisan && (
+                                <div className="bg-white p-5 border border-stone-200 shadow-sm">
+                                    <div className="flex items-start gap-3">
+                                        <div className="h-10 w-10 border border-stone-200 bg-[#FDFCF8] flex items-center justify-center text-stone-500 shrink-0">
+                                            <CalendarDays size={18} strokeWidth={1.5} />
+                                        </div>
+                                        <div>
+                                            <h4 className="font-serif text-lg text-stone-900">Forget-Me-Not</h4>
+                                            <p className="mt-1 text-sm leading-relaxed text-stone-500">Never miss birthdays, anniversaries, and special moments.</p>
+                                        </div>
+                                    </div>
+
+                                    {savedDatesSuccess && (
+                                        <div className="mt-4 flex items-start gap-2 border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800">
+                                            <CheckCircle2 size={16} className="mt-0.5 shrink-0" /> {savedDatesSuccess}
+                                        </div>
+                                    )}
+
+                                    {savedDatesError && (
+                                        <div className="mt-4 flex items-start gap-2 border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                                            <AlertCircle size={16} className="mt-0.5 shrink-0" /> {savedDatesError}
+                                        </div>
+                                    )}
+
+                                    <div className="mt-4 flex items-center justify-between gap-4 border-t border-stone-100 pt-4">
+                                        <p className="text-sm font-medium text-stone-700">{reminderCountText}</p>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setSavedDatesError('');
+                                                setSavedDatesSuccess('');
+                                                setShowSavedDateModal(true);
+                                            }}
+                                            className="inline-flex min-h-10 items-center justify-center gap-2 border border-stone-900 px-3 text-xs font-medium uppercase tracking-widest text-stone-900 transition-colors hover:bg-stone-900 hover:text-white"
+                                        >
+                                            <Bell size={14} /> Add reminder
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className="bg-stone-50 p-5 border border-stone-200">
+                                <h4 className="font-serif text-lg text-stone-900 mb-3">Account Settings</h4>
+                                <ul className="divide-y divide-stone-200 text-sm">
+                                    <li><button className="w-full py-3 text-left text-stone-600 hover:text-stone-900 transition-colors">Payment Methods</button></li>
+                                    <li><a href="#saved-addresses" className="w-full py-3 text-left text-stone-600 hover:text-stone-900 transition-colors block">Saved Addresses</a></li>
+                                    <li><button className="w-full py-3 text-left text-stone-600 hover:text-stone-900 transition-colors">Notification Preferences</button></li>
+                                    <li><button className="w-full py-3 text-left text-stone-600 hover:text-stone-900 transition-colors">Privacy & Security</button></li>
                                 </ul>
                             </div>
                         </div>
