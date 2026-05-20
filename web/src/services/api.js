@@ -68,6 +68,11 @@ export const addressesAPI = {
     deleteAddress: (id) => api.delete(`/addresses/${id}`),
 };
 
+export const savedDatesAPI = {
+    getSavedDates: () => api.get('/users/dates'),
+    createSavedDate: (data) => api.post('/users/dates', data),
+};
+
 export const ordersAPI = {
     createOrder: (data) => api.post('/orders', data),
     getBuyerOrders: () => api.get('/orders'),

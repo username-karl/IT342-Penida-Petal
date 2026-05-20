@@ -2,9 +2,9 @@ import { useAuth } from '../context/AuthContext';
 import { useNavigate, Link } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import {
-    AlertCircle, CheckCircle2, Gift, Heart, Leaf, MapPin, PackageCheck, Plus, Shield, Star, Trash2, Truck, Edit2, X
+    AlertCircle, Bell, CalendarDays, CheckCircle2, Gift, Heart, Leaf, MapPin, PackageCheck, Plus, Shield, Star, Trash2, Truck, Edit2, X
 } from 'lucide-react';
-import { addressesAPI, ordersAPI } from '../services/api';
+import { addressesAPI, ordersAPI, savedDatesAPI } from '../services/api';
 
 function currency(value) {
     const number = Number(value || 0);
@@ -50,6 +50,21 @@ function deliveryLabel(order) {
     return `${date.toLocaleDateString('en-PH', { month: 'long', day: 'numeric', year: 'numeric' })} · ${order.timeSlot}`;
 }
 
+function formatSavedDate(value) {
+    if (!value) return 'Date pending';
+    const date = new Date(`${value}T00:00:00`);
+    return date.toLocaleDateString('en-PH', { month: 'long', day: 'numeric', year: 'numeric' });
+}
+
+function normalizeSavedDate(savedDate) {
+    return {
+        id: savedDate.id || savedDate.dateId,
+        label: savedDate.label || 'Important date',
+        eventDate: savedDate.eventDate,
+        recurring: savedDate.recurring ?? savedDate.isRecurring ?? false,
+    };
+}
+
 const RECENT_ORDER_LIMIT = 3;
 
 export default function Profile() {
@@ -64,6 +79,18 @@ export default function Profile() {
     const [addresses, setAddresses] = useState([]);
     const [addressesLoading, setAddressesLoading] = useState(true);
     const [addressesError, setAddressesError] = useState('');
+    const [savedDates, setSavedDates] = useState([]);
+    const [savedDatesLoading, setSavedDatesLoading] = useState(true);
+    const [savedDatesError, setSavedDatesError] = useState('');
+    const [savedDatesSuccess, setSavedDatesSuccess] = useState('');
+    const [showSavedDateModal, setShowSavedDateModal] = useState(false);
+    const [savedDateSaving, setSavedDateSaving] = useState(false);
+    const [savedDateFormErrors, setSavedDateFormErrors] = useState({});
+    const [savedDateForm, setSavedDateForm] = useState({
+        label: '',
+        eventDate: '',
+        isRecurring: true,
+    });
     const [addressForm, setAddressForm] = useState({
         label: 'Home',
         recipientName: '',
@@ -121,9 +148,90 @@ export default function Profile() {
         }
     }, [isArtisan, user]);
 
+    useEffect(() => {
+        const loadSavedDates = async () => {
+            setSavedDatesLoading(true);
+            setSavedDatesError('');
+            try {
+                const response = await savedDatesAPI.getSavedDates();
+                setSavedDates((response.data.data || []).map(normalizeSavedDate));
+            } catch (err) {
+                setSavedDatesError(err.response?.data?.message || err.message || 'Unable to load important dates');
+            } finally {
+                setSavedDatesLoading(false);
+            }
+        };
+
+        if (user && !isArtisan) {
+            loadSavedDates();
+        } else {
+            setSavedDatesLoading(false);
+        }
+    }, [isArtisan, user]);
+
     const handleLogout = () => {
         logout();
         navigate('/login');
+    };
+
+    const updateSavedDateForm = (field, value) => {
+        setSavedDateForm((current) => ({ ...current, [field]: value }));
+        setSavedDateFormErrors((current) => ({ ...current, [field]: '' }));
+    };
+
+    const resetSavedDateForm = () => {
+        setSavedDateForm({
+            label: '',
+            eventDate: '',
+            isRecurring: true,
+        });
+        setSavedDateFormErrors({});
+    };
+
+    const closeSavedDateModal = () => {
+        setShowSavedDateModal(false);
+        resetSavedDateForm();
+    };
+
+    const validateSavedDateForm = () => {
+        const errors = {};
+        if (!savedDateForm.label.trim()) {
+            errors.label = 'Add a label for this date.';
+        }
+        if (!savedDateForm.eventDate) {
+            errors.eventDate = 'Choose the event date.';
+        }
+        return errors;
+    };
+
+    const saveImportantDate = async (event) => {
+        event.preventDefault();
+        const errors = validateSavedDateForm();
+        setSavedDateFormErrors(errors);
+        setSavedDatesError('');
+        setSavedDatesSuccess('');
+
+        if (Object.keys(errors).length > 0) {
+            return;
+        }
+
+        setSavedDateSaving(true);
+        try {
+            const response = await savedDatesAPI.createSavedDate({
+                label: savedDateForm.label.trim(),
+                eventDate: savedDateForm.eventDate,
+                isRecurring: Boolean(savedDateForm.isRecurring),
+            });
+            const savedDate = normalizeSavedDate(response.data.data);
+            setSavedDates((current) => [savedDate, ...current]);
+            setSavedDatesSuccess(`${savedDate.label} has been saved.`);
+            closeSavedDateModal();
+        } catch (err) {
+            const message = err.response?.data?.message || err.message || 'Unable to save important date';
+            setSavedDatesError(message);
+        } finally {
+            setSavedDateSaving(false);
+        }
     };
 
     const updateAddressForm = (field, value) => {
@@ -371,50 +479,93 @@ export default function Profile() {
                             </section>
                         )}
 
-                        <section>
-                            <div className="flex items-center justify-between mb-6 border-b border-stone-200 pb-4">
-                                <div className="flex items-center gap-3">
-                                    <h3 className="text-2xl font-serif text-stone-900">Forget-Me-Not</h3>
-                                    <span className="bg-stone-100 text-stone-600 text-[10px] uppercase font-bold px-2 py-1 tracking-wider rounded-sm">Automated</span>
-                                </div>
-                                <button className="text-xs uppercase tracking-widest text-stone-500 hover:text-stone-900 flex items-center gap-2 transition-colors">
-                                    <Plus size={14} /> Add Date
-                                </button>
-                            </div>
-
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div className="bg-white border border-stone-200 p-6 relative group hover:border-stone-400 transition-all">
-                                    <div className="absolute top-4 right-4 text-stone-300 group-hover:text-stone-900 transition-colors">
-                                        <Shield size={16} />
-                                    </div>
-                                    <p className="text-xs uppercase tracking-widest text-stone-500 mb-2">Upcoming</p>
-                                    <h4 className="text-xl font-serif text-stone-900 mb-1">My Wife's Birthday</h4>
-                                    <p className="text-sm text-stone-600 mb-4">February 14, 2026</p>
-                                    <div className="flex items-center gap-2 my-4">
-                                        <div className="h-1.5 flex-1 bg-stone-100 rounded-full overflow-hidden">
-                                            <div className="h-full bg-stone-900 w-3/4"></div>
+                        {!isArtisan && (
+                            <section>
+                                <div className="mb-6 flex flex-col gap-4 border-b border-stone-200 pb-4 sm:flex-row sm:items-end sm:justify-between">
+                                    <div>
+                                        <div className="flex flex-wrap items-center gap-3">
+                                            <h3 className="text-2xl font-serif text-stone-900">Forget-Me-Not</h3>
+                                            <span className="border border-stone-200 bg-white px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-stone-600">Reminder ready</span>
                                         </div>
-                                        <span className="text-[10px] text-stone-500 font-medium whitespace-nowrap">3 Days Left</span>
+                                        <p className="mt-2 max-w-2xl text-sm leading-relaxed text-stone-500">
+                                            Save birthdays, anniversaries, and special dates. Petal will remind you before they arrive.
+                                        </p>
                                     </div>
-                                    <div className="flex items-center gap-2">
-                                        <label className="custom-checkbox flex items-center gap-2 cursor-pointer">
-                                            <div className="w-8 h-4 bg-stone-900 rounded-full relative">
-                                                <div className="absolute right-1 top-0.5 w-3 h-3 bg-white rounded-full"></div>
-                                            </div>
-                                            <span className="text-[10px] uppercase tracking-wider text-stone-900 font-bold">Auto-Send</span>
-                                        </label>
-                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setSavedDatesError('');
+                                            setSavedDatesSuccess('');
+                                            setShowSavedDateModal(true);
+                                        }}
+                                        className="inline-flex min-h-11 items-center justify-center gap-2 border border-stone-900 px-4 text-xs font-medium uppercase tracking-widest text-stone-900 transition-colors hover:bg-stone-900 hover:text-white"
+                                    >
+                                        <Plus size={14} /> Add Date
+                                    </button>
                                 </div>
 
-                                <div className="bg-stone-50 border border-stone-200 p-6 flex flex-col justify-center items-center text-center hover:bg-white transition-colors cursor-pointer border-dashed">
-                                    <div className="w-10 h-10 bg-stone-200 rounded-full flex items-center justify-center text-stone-500 mb-3">
-                                        <Plus size={20} />
+                                {savedDatesSuccess && (
+                                    <div className="mb-4 flex items-start gap-2 border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+                                        <CheckCircle2 size={16} className="mt-0.5 shrink-0" /> {savedDatesSuccess}
                                     </div>
-                                    <h4 className="font-serif text-lg text-stone-900">Add New Date</h4>
-                                    <p className="text-xs text-stone-500 mt-1">Never miss an important moment.</p>
-                                </div>
-                            </div>
-                        </section>
+                                )}
+
+                                {savedDatesError && (
+                                    <div className="mb-4 flex items-start gap-2 border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                                        <AlertCircle size={16} className="mt-0.5 shrink-0" /> {savedDatesError}
+                                    </div>
+                                )}
+
+                                {savedDatesLoading ? (
+                                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                                        {[1, 2].map((item) => (
+                                            <div key={item} className="h-40 animate-pulse border border-stone-200 bg-stone-100" />
+                                        ))}
+                                    </div>
+                                ) : savedDates.length ? (
+                                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                                        {savedDates.map((savedDate) => (
+                                            <div key={savedDate.id || `${savedDate.label}-${savedDate.eventDate}`} className="group border border-stone-200 bg-white p-5 transition-colors hover:border-stone-400">
+                                                <div className="flex items-start justify-between gap-4">
+                                                    <div className="flex min-w-0 gap-4">
+                                                        <div className="flex h-11 w-11 shrink-0 items-center justify-center border border-stone-200 bg-[#FDFCF8] text-stone-500">
+                                                            <CalendarDays size={19} strokeWidth={1.5} />
+                                                        </div>
+                                                        <div className="min-w-0">
+                                                            <p className="text-xs uppercase tracking-[0.18em] text-stone-400">Important date</p>
+                                                            <h4 className="mt-1 font-serif text-xl leading-tight text-stone-950">{savedDate.label}</h4>
+                                                            <p className="mt-1 text-sm text-stone-500">{formatSavedDate(savedDate.eventDate)}</p>
+                                                        </div>
+                                                    </div>
+                                                    <span className={`shrink-0 border px-2.5 py-1 text-[10px] font-medium uppercase tracking-wide ${savedDate.recurring ? 'border-green-200 bg-green-50 text-green-800' : 'border-stone-200 bg-stone-50 text-stone-600'}`}>
+                                                        {savedDate.recurring ? 'Recurring' : 'One-time'}
+                                                    </span>
+                                                </div>
+                                                <div className="mt-5 flex items-center gap-2 border-t border-stone-100 pt-4 text-xs leading-relaxed text-stone-500">
+                                                    <Bell size={15} strokeWidth={1.5} className="shrink-0 text-stone-400" />
+                                                    Reminder checks run 3 days before this date.
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="border border-dashed border-stone-300 bg-stone-50 px-6 py-10 text-center">
+                                        <CalendarDays className="mx-auto mb-3 text-stone-400" size={28} strokeWidth={1.5} />
+                                        <h4 className="font-serif text-xl text-stone-900">No important dates yet</h4>
+                                        <p className="mx-auto mt-1 max-w-md text-sm leading-relaxed text-stone-500">
+                                            Add birthdays, anniversaries, and moments you don't want to miss.
+                                        </p>
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowSavedDateModal(true)}
+                                            className="mt-5 inline-flex min-h-11 items-center justify-center gap-2 bg-stone-900 px-5 text-sm font-medium text-white transition-colors hover:bg-stone-800"
+                                        >
+                                            <Plus size={15} /> Add first date
+                                        </button>
+                                    </div>
+                                )}
+                            </section>
+                        )}
 
                         {!isArtisan && (
                             <section>
@@ -706,6 +857,89 @@ export default function Profile() {
                                 </button>
                                 <button className="min-h-11 bg-stone-900 px-5 text-sm font-medium text-white transition-colors hover:bg-stone-800 inline-flex items-center justify-center gap-2">
                                     <Plus size={15} /> Save Recipient
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {showSavedDateModal && (
+                <div className="fixed inset-0 z-[80] flex items-end justify-center bg-stone-950/45 px-4 py-4 backdrop-blur-sm sm:items-center" role="dialog" aria-modal="true" aria-labelledby="saved-date-modal-title">
+                    <div className="w-full max-w-lg border border-stone-200 bg-[#FDFCF8] shadow-2xl">
+                        <div className="flex items-start justify-between gap-4 border-b border-stone-200 px-5 py-4">
+                            <div>
+                                <p className="text-xs uppercase tracking-widest text-stone-500">Forget-Me-Not</p>
+                                <h2 id="saved-date-modal-title" className="mt-1 font-serif text-2xl text-stone-900">Add Important Date</h2>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={closeSavedDateModal}
+                                className="flex h-11 w-11 items-center justify-center border border-stone-200 text-stone-600 transition-colors hover:border-stone-900 hover:text-stone-900"
+                                aria-label="Close important date form"
+                            >
+                                <X size={18} />
+                            </button>
+                        </div>
+
+                        <form onSubmit={saveImportantDate} className="px-5 py-5">
+                            {savedDatesError && (
+                                <div className="mb-4 flex items-start gap-2 border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                                    <AlertCircle size={16} className="mt-0.5 shrink-0" /> {savedDatesError}
+                                </div>
+                            )}
+
+                            <div className="grid grid-cols-1 gap-4">
+                                <label className="block">
+                                    <span className="text-xs uppercase tracking-wider text-stone-500 font-medium">Label</span>
+                                    <input
+                                        value={savedDateForm.label}
+                                        onChange={(event) => updateSavedDateForm('label', event.target.value)}
+                                        placeholder="Mom's birthday"
+                                        className={`mt-2 min-h-11 w-full border bg-white px-3 text-stone-900 outline-none focus:border-stone-900 ${savedDateFormErrors.label ? 'border-red-300' : 'border-stone-200'}`}
+                                    />
+                                    {savedDateFormErrors.label && <p className="mt-1 text-xs text-red-700">{savedDateFormErrors.label}</p>}
+                                </label>
+
+                                <label className="block">
+                                    <span className="text-xs uppercase tracking-wider text-stone-500 font-medium">Event Date</span>
+                                    <input
+                                        type="date"
+                                        value={savedDateForm.eventDate}
+                                        onChange={(event) => updateSavedDateForm('eventDate', event.target.value)}
+                                        className={`mt-2 min-h-11 w-full border bg-white px-3 text-stone-900 outline-none focus:border-stone-900 ${savedDateFormErrors.eventDate ? 'border-red-300' : 'border-stone-200'}`}
+                                    />
+                                    {savedDateFormErrors.eventDate && <p className="mt-1 text-xs text-red-700">{savedDateFormErrors.eventDate}</p>}
+                                </label>
+
+                                <label className="flex min-h-14 items-center justify-between gap-4 border border-stone-200 bg-white px-4 py-3">
+                                    <span>
+                                        <span className="block text-sm font-medium text-stone-900">Repeat every year</span>
+                                        <span className="mt-1 block text-xs leading-relaxed text-stone-500">Use this for birthdays, anniversaries, and recurring moments.</span>
+                                    </span>
+                                    <input
+                                        type="checkbox"
+                                        checked={savedDateForm.isRecurring}
+                                        onChange={(event) => updateSavedDateForm('isRecurring', event.target.checked)}
+                                        className="h-4 w-4 shrink-0 accent-stone-900"
+                                    />
+                                </label>
+                            </div>
+
+                            <div className="mt-5 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                                <button
+                                    type="button"
+                                    onClick={closeSavedDateModal}
+                                    className="min-h-11 border border-stone-200 px-5 text-sm font-medium text-stone-700 transition-colors hover:border-stone-900 hover:text-stone-900"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={savedDateSaving}
+                                    className="inline-flex min-h-11 items-center justify-center gap-2 bg-stone-900 px-5 text-sm font-medium text-white transition-colors hover:bg-stone-800 disabled:cursor-not-allowed disabled:opacity-60"
+                                >
+                                    <Plus size={15} /> {savedDateSaving ? 'Saving...' : 'Save Date'}
                                 </button>
                             </div>
                         </form>
