@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { AlertCircle, ArrowLeft, Leaf, PackageCheck, ShoppingBag, Truck } from 'lucide-react';
+import { AlertCircle, ArrowLeft, Gift, Leaf, PackageCheck, Truck } from 'lucide-react';
 import PurchaseHistoryCard, { currency } from '../components/PurchaseHistoryCard';
 import { ordersAPI } from '../services/api';
 
@@ -17,7 +17,7 @@ export default function PurchaseHistory() {
                 const response = await ordersAPI.getBuyerOrders();
                 setOrders(response.data.data || []);
             } catch (err) {
-                setError(err.response?.data?.message || err.message || 'Unable to load purchase history');
+                setError(err.response?.data?.message || err.message || 'Unable to load gift history');
             } finally {
                 setLoading(false);
             }
@@ -53,9 +53,9 @@ export default function PurchaseHistory() {
                     <p className="text-xs uppercase tracking-[0.22em] text-stone-400">Account archive</p>
                     <div className="mt-3 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
                         <div>
-                            <h1 className="font-serif text-4xl text-stone-950 md:text-5xl">Purchase History</h1>
+                            <h1 className="font-serif text-4xl text-stone-950 md:text-5xl">Gift History</h1>
                             <p className="mt-2 max-w-2xl text-sm leading-relaxed text-stone-500">
-                                Review every bouquet purchase, delivery state, recipient, and order detail from one dedicated page.
+                                Review every bouquet gift, delivery state, recipient, and order detail from one dedicated page.
                             </p>
                         </div>
                         <Link to="/dashboard" className="inline-flex min-h-11 items-center justify-center border border-stone-900 px-5 text-sm font-medium text-stone-900 transition-colors hover:bg-stone-900 hover:text-white">
@@ -66,18 +66,18 @@ export default function PurchaseHistory() {
 
                 <section className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-3">
                     <div className="border border-stone-200 bg-white p-5">
-                        <ShoppingBag size={18} className="text-stone-500" />
-                        <p className="mt-4 text-xs uppercase tracking-widest text-stone-400">Total purchases</p>
+                        <Gift size={18} className="text-stone-500" />
+                        <p className="mt-4 text-xs uppercase tracking-widest text-stone-400">Total gifts</p>
                         <p className="mt-1 font-serif text-3xl text-stone-950">{orders.length}</p>
                     </div>
                     <div className="border border-stone-200 bg-white p-5">
                         <Truck size={18} className="text-stone-500" />
-                        <p className="mt-4 text-xs uppercase tracking-widest text-stone-400">Active deliveries</p>
+                        <p className="mt-4 text-xs uppercase tracking-widest text-stone-400">Active gifts</p>
                         <p className="mt-1 font-serif text-3xl text-stone-950">{stats.active}</p>
                     </div>
                     <div className="border border-stone-200 bg-white p-5">
                         <PackageCheck size={18} className="text-stone-500" />
-                        <p className="mt-4 text-xs uppercase tracking-widest text-stone-400">Total spent</p>
+                        <p className="mt-4 text-xs uppercase tracking-widest text-stone-400">Gift total</p>
                         <p className="mt-1 font-serif text-3xl text-stone-950">{currency(stats.total)}</p>
                     </div>
                 </section>
@@ -85,9 +85,9 @@ export default function PurchaseHistory() {
                 <section className="mt-8">
                     <div className="mb-5 flex flex-col gap-2 border-b border-stone-200 pb-4 sm:flex-row sm:items-end sm:justify-between">
                         <div>
-                            <h2 className="font-serif text-2xl text-stone-900">All Purchases</h2>
+                            <h2 className="font-serif text-2xl text-stone-900">All Gifts</h2>
                             <p className="mt-1 text-sm text-stone-500">
-                                {orders.length ? `Showing ${orders.length} purchase${orders.length === 1 ? '' : 's'}` : 'Your purchases will appear here after checkout.'}
+                                {orders.length ? `Showing ${orders.length} gift${orders.length === 1 ? '' : 's'}` : 'Your gifts will appear here after checkout.'}
                             </p>
                         </div>
                     </div>
@@ -113,8 +113,8 @@ export default function PurchaseHistory() {
                     ) : (
                         <div className="border border-dashed border-stone-300 bg-stone-50 px-6 py-12 text-center">
                             <PackageCheck className="mx-auto mb-3 text-stone-400" size={28} />
-                            <h3 className="font-serif text-2xl text-stone-900">No purchases yet</h3>
-                            <p className="mt-1 text-sm text-stone-500">Orders from checkout will be saved here for easy review.</p>
+                            <h3 className="font-serif text-2xl text-stone-900">No gifts yet</h3>
+                            <p className="mt-1 text-sm text-stone-500">Bouquet gifts from checkout will be saved here for easy review.</p>
                             <Link to="/dashboard" className="mt-5 inline-flex min-h-11 items-center justify-center bg-stone-900 px-5 text-sm font-semibold text-white hover:bg-stone-800">
                                 Browse flowers
                             </Link>

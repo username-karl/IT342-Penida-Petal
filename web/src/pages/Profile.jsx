@@ -567,7 +567,7 @@ export default function Profile() {
                                         </p>
                                     </div>
                                     <Link to="/purchase-history" className="inline-flex min-h-11 items-center justify-center border border-stone-900 px-4 text-xs font-medium uppercase tracking-widest text-stone-900 transition-colors hover:bg-stone-900 hover:text-white">
-                                        View Purchase History
+                                        View Gift History
                                     </Link>
                                 </div>
 
