@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.petal.dto.BuyerOrderResponse;
 import com.petal.dto.CreateOrderRequest;
 import com.petal.dto.OrderResponse;
+import com.petal.dto.ShippingInfoResponse;
+import com.petal.dto.TrackingEventResponse;
 import com.petal.entity.User;
 import com.petal.repository.UserRepository;
 import com.petal.security.JwtUtil;
@@ -21,6 +23,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.hamcrest.Matchers.hasSize;
@@ -126,6 +129,18 @@ class OrderControllerTest {
                         .totalAmount(new BigDecimal("2468.00"))
                         .recipientName("Maria Santos")
                         .recipientAddress("Cebu Business Park")
+                        .shipping(ShippingInfoResponse.builder()
+                                .courierName("Petal Cebu Rider")
+                                .trackingNumber("PETAL-TRACK-25")
+                                .estimatedDeliveryDate(LocalDate.of(2026, 5, 19))
+                                .latestStatus("Out for delivery")
+                                .events(List.of(TrackingEventResponse.builder()
+                                        .id(9L)
+                                        .status("Out for delivery")
+                                        .description("Your bouquet is on the way to the recipient.")
+                                        .timestamp(LocalDateTime.of(2026, 5, 19, 12, 10))
+                                        .build()))
+                                .build())
                         .itemSummary("Aurora Hydrangea x2")
                         .build());
 
@@ -136,7 +151,10 @@ class OrderControllerTest {
                 .andExpect(jsonPath("$.data.orderNumber", is("PET-0025")))
                 .andExpect(jsonPath("$.data.status", is("READY_FOR_PICKUP")))
                 .andExpect(jsonPath("$.data.paymentMethod", is("MAYA")))
-                .andExpect(jsonPath("$.data.recipientAddress", is("Cebu Business Park")));
+                .andExpect(jsonPath("$.data.recipientAddress", is("Cebu Business Park")))
+                .andExpect(jsonPath("$.data.shipping.courierName", is("Petal Cebu Rider")))
+                .andExpect(jsonPath("$.data.shipping.trackingNumber", is("PETAL-TRACK-25")))
+                .andExpect(jsonPath("$.data.shipping.events[0].status", is("Out for delivery")));
     }
 
     private User authenticatedUser() {

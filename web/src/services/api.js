@@ -75,6 +75,7 @@ export const ordersAPI = {
     getSellerOrders: () => api.get('/seller/orders'),
     getSellerOrder: (id) => api.get(`/seller/orders/${id}`),
     updateSellerOrderStatus: (id, status) => api.put(`/seller/orders/${id}/status`, { status }),
+    updateSellerShipping: (id, data) => api.put(`/seller/orders/${id}/shipping`, data),
 };
 
 export default api;

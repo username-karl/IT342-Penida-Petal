@@ -60,10 +60,22 @@ public class Order {
     @Builder.Default
     private String status = "PENDING";
 
+    private String courierName;
+
+    private String trackingNumber;
+
+    private LocalDate estimatedDeliveryDate;
+
+    private String latestShippingStatus;
+
     @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal totalAmount;
 
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     private List<OrderItem> items = new ArrayList<>();
+
+    @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
+    private List<TrackingEvent> trackingEvents = new ArrayList<>();
 }

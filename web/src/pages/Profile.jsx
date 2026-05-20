@@ -2,7 +2,7 @@ import { useAuth } from '../context/AuthContext';
 import { useNavigate, Link } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import {
-    AlertCircle, CheckCircle2, Gift, Heart, Leaf, MapPin, PackageCheck, Plus, Shield, Star, Trash2, Truck, Edit2
+    AlertCircle, CheckCircle2, Gift, Heart, Leaf, MapPin, PackageCheck, Plus, Shield, Star, Trash2, Truck, Edit2, X
 } from 'lucide-react';
 import { addressesAPI, ordersAPI } from '../services/api';
 
@@ -14,8 +14,12 @@ function currency(value) {
 function statusLabel(status) {
     const labels = {
         PENDING: 'Order Placed',
-        PREPARING: 'Being Prepared',
+        ACCEPTED: 'Accepted',
+        ARRANGING: 'Being Arranged',
+        PREPARING: 'Being Arranged',
         READY_FOR_PICKUP: 'Ready for Pickup',
+        OUT_FOR_DELIVERY: 'Out for Delivery',
+        DELIVERED: 'Delivered',
         COMPLETED: 'Delivered',
         CANCELLED: 'Cancelled',
     };
@@ -23,9 +27,10 @@ function statusLabel(status) {
 }
 
 function statusClass(status) {
-    if (status === 'COMPLETED' || status === 'READY_FOR_PICKUP') return 'bg-green-50 text-green-800 border-green-200';
+    if (status === 'COMPLETED' || status === 'DELIVERED' || status === 'READY_FOR_PICKUP') return 'bg-green-50 text-green-800 border-green-200';
     if (status === 'CANCELLED') return 'bg-stone-100 text-stone-500 border-stone-200';
-    if (status === 'PREPARING') return 'bg-amber-50 text-amber-800 border-amber-200';
+    if (status === 'ACCEPTED' || status === 'ARRANGING' || status === 'PREPARING') return 'bg-amber-50 text-amber-800 border-amber-200';
+    if (status === 'OUT_FOR_DELIVERY') return 'bg-stone-900 text-white border-stone-900';
     return 'bg-rose-50 text-rose-800 border-rose-200';
 }
 
@@ -45,10 +50,14 @@ function deliveryLabel(order) {
     return `${date.toLocaleDateString('en-PH', { month: 'long', day: 'numeric', year: 'numeric' })} · ${order.timeSlot}`;
 }
 
+const RECENT_ORDER_LIMIT = 3;
+
 export default function Profile() {
     const { user, logout } = useAuth();
     const navigate = useNavigate();
     const [isEditing, setIsEditing] = useState(false);
+    const [showRecipientBook, setShowRecipientBook] = useState(false);
+    const [showRecipientModal, setShowRecipientModal] = useState(false);
     const [orders, setOrders] = useState([]);
     const [ordersLoading, setOrdersLoading] = useState(true);
     const [ordersError, setOrdersError] = useState('');
@@ -68,6 +77,7 @@ export default function Profile() {
     const role = user?.role || 'Customer';
     const initials = displayName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
     const isArtisan = user?.role === 'artisan' || user?.role === 'ARTISAN' || user?.role === 'ROLE_FLORIST';
+    const recentOrders = orders.slice(0, RECENT_ORDER_LIMIT);
 
     useEffect(() => {
         const loadOrders = async () => {
@@ -120,6 +130,21 @@ export default function Profile() {
         setAddressForm((current) => ({ ...current, [field]: value }));
     };
 
+    const resetAddressForm = () => {
+        setAddressForm({
+            label: 'Home',
+            recipientName: '',
+            phoneNumber: '',
+            addressLine: '',
+            defaultAddress: false,
+        });
+    };
+
+    const closeRecipientModal = () => {
+        setShowRecipientModal(false);
+        resetAddressForm();
+    };
+
     const saveAddress = async (event) => {
         event.preventDefault();
         setAddressesError('');
@@ -132,13 +157,9 @@ export default function Profile() {
                     : current;
                 return [savedAddress, ...next];
             });
-            setAddressForm({
-                label: 'Home',
-                recipientName: '',
-                phoneNumber: '',
-                addressLine: '',
-                defaultAddress: false,
-            });
+            resetAddressForm();
+            setShowRecipientModal(false);
+            setShowRecipientBook(true);
         } catch (err) {
             setAddressesError(err.response?.data?.message || err.message || 'Unable to save address');
         }
@@ -257,9 +278,9 @@ export default function Profile() {
                         </section>
 
                         {/* ─── FORGET-ME-NOT / IMPORTANT DATES ─── */}
-                        {!isArtisan && (
+                        {false && !isArtisan && (
                             <section id="saved-addresses">
-                                <div className="flex items-center justify-between mb-6 border-b border-stone-200 pb-4">
+                                <div className="mb-6 flex flex-col gap-3 border-b border-stone-200 pb-4 sm:flex-row sm:items-end sm:justify-between">
                                     <h3 className="text-2xl font-serif text-stone-900">Saved Addresses</h3>
                                     <span className="text-xs uppercase tracking-widest text-stone-400">{addresses.length} saved</span>
                                 </div>
@@ -398,9 +419,16 @@ export default function Profile() {
                         {!isArtisan && (
                             <section>
                                 <div className="flex items-center justify-between mb-6 border-b border-stone-200 pb-4">
-                                    <h3 className="text-2xl font-serif text-stone-900">Order History</h3>
-                                    <Link to="/dashboard" className="text-xs uppercase tracking-widest text-stone-500 hover:text-stone-900 transition-colors">
-                                        Continue Shopping
+                                    <div>
+                                        <h3 className="text-2xl font-serif text-stone-900">Recent Purchases</h3>
+                                        <p className="mt-1 text-sm text-stone-500">
+                                            {orders.length
+                                                ? `Showing latest ${Math.min(orders.length, RECENT_ORDER_LIMIT)} of ${orders.length} purchase${orders.length === 1 ? '' : 's'}`
+                                                : 'Your latest purchases will appear here after checkout.'}
+                                        </p>
+                                    </div>
+                                    <Link to="/purchase-history" className="inline-flex min-h-11 items-center justify-center border border-stone-900 px-4 text-xs font-medium uppercase tracking-widest text-stone-900 transition-colors hover:bg-stone-900 hover:text-white">
+                                        View purchase history
                                     </Link>
                                 </div>
 
@@ -416,9 +444,9 @@ export default function Profile() {
                                             <div key={item} className="h-28 bg-stone-100 animate-pulse" />
                                         ))}
                                     </div>
-                                ) : orders.length ? (
+                                ) : recentOrders.length ? (
                                     <div className="space-y-4">
-                                        {orders.map((order) => (
+                                        {recentOrders.map((order) => (
                                             <Link to={`/orders/${order.id}`} key={order.id} className="block border border-stone-200 bg-white p-4 sm:p-5 hover:border-stone-300 transition-colors">
                                                 <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                                                     <div className="flex gap-4 min-w-0">
@@ -455,6 +483,11 @@ export default function Profile() {
                                                 </div>
                                             </Link>
                                         ))}
+                                        {orders.length > RECENT_ORDER_LIMIT && (
+                                            <Link to="/purchase-history" className="flex min-h-12 items-center justify-center border border-dashed border-stone-300 bg-stone-50 px-4 text-sm font-medium text-stone-700 transition-colors hover:border-stone-900 hover:bg-white hover:text-stone-950">
+                                                View all {orders.length} purchases
+                                            </Link>
+                                        )}
                                     </div>
                                 ) : (
                                     <div className="border border-dashed border-stone-300 bg-stone-50 px-6 py-10 text-center">
@@ -496,7 +529,7 @@ export default function Profile() {
                         </section>
 
                         {/* Petal Points Explainer (Replacing the specific component with cleaner UI) */}
-                        {!isArtisan && (
+                        {false && !isArtisan && (
                             <section>
                                 <h3 className="text-2xl font-serif text-stone-900 mb-6 border-b border-stone-200 pb-4">Petal Rewards</h3>
                                 <div className="bg-stone-900 text-stone-100 p-8 md:p-10 relative overflow-hidden">
@@ -526,20 +559,82 @@ export default function Profile() {
                     {/* ─── RIGHT: MEMBERSHIP CARD ─── */}
                     <div className="lg:col-span-1">
                         <div className="sticky top-32 space-y-8">
-                            <div className="bg-white p-8 border border-stone-200 shadow-sm text-center">
-                                <p className="text-xs uppercase tracking-widest text-stone-500 mb-2">Current Status</p>
-                                <h2 className="text-3xl font-serif text-stone-900 mb-4">{isArtisan ? 'Artisan Studio' : 'Seedling Member'}</h2>
-                                <div className="w-full bg-stone-100 h-1 mb-4">
-                                    <div className="bg-stone-900 h-1 w-3/4"></div>
+                            <div id="saved-addresses" className="bg-white p-6 border border-stone-200 shadow-sm">
+                                <div className="flex items-start justify-between gap-4 border-b border-stone-100 pb-4">
+                                    <div>
+                                        <p className="text-xs uppercase tracking-widest text-stone-500">Saved Addresses</p>
+                                        <h2 className="mt-1 text-2xl font-serif text-stone-900">Recipient Book</h2>
+                                    </div>
+                                    <span className="border border-stone-200 px-2 py-1 text-[10px] uppercase tracking-wider text-stone-500">{addresses.length} saved</span>
                                 </div>
-                                <div className="flex justify-between text-[10px] uppercase tracking-wider text-stone-400 mb-6">
-                                    <span>0 pts</span>
-                                    <span>500 pts</span>
-                                </div>
-                                <p className="text-4xlfont-serif text-stone-900 mb-1">380</p>
-                                <p className="text-sm text-stone-500 mb-6">Petal Points Available</p>
-                                <button className="w-full py-3 border border-stone-900 text-stone-900 text-sm font-medium hover:bg-stone-900 hover:text-white transition-colors">
-                                    View Rewards
+
+                                {addressesError && (
+                                    <div className="mt-4 border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 flex items-start gap-2">
+                                        <AlertCircle size={16} className="mt-0.5 shrink-0" /> {addressesError}
+                                    </div>
+                                )}
+
+                                {addressesLoading ? (
+                                    <div className="mt-4 h-24 bg-stone-100 animate-pulse" />
+                                ) : (
+                                    <div className="mt-4 space-y-3">
+                                        {(showRecipientBook ? addresses : addresses.slice(0, 1)).map((address) => (
+                                            <div key={address.id} className="border border-stone-200 bg-[#FDFCF8] p-4">
+                                                <div className="flex items-start gap-3">
+                                                    <div className="h-9 w-9 border border-stone-200 bg-white flex items-center justify-center text-stone-500 shrink-0">
+                                                        <MapPin size={16} strokeWidth={1.5} />
+                                                    </div>
+                                                    <div className="min-w-0 flex-1">
+                                                        <div className="flex flex-wrap items-center gap-2">
+                                                            <h4 className="font-serif text-lg leading-tight text-stone-950">{address.label}</h4>
+                                                            {address.defaultAddress && (
+                                                                <span className="border border-green-200 bg-green-50 px-2 py-0.5 text-[10px] uppercase tracking-wide text-green-800">Default</span>
+                                                            )}
+                                                        </div>
+                                                        <p className="mt-1 text-sm font-medium text-stone-800">{address.recipientName}</p>
+                                                        <p className="mt-1 text-xs leading-relaxed text-stone-500">{address.addressLine}</p>
+                                                        {address.phoneNumber && <p className="mt-1 text-xs text-stone-400">{address.phoneNumber}</p>}
+                                                    </div>
+                                                </div>
+                                                {showRecipientBook && (
+                                                    <div className="mt-3 flex gap-2">
+                                                        {!address.defaultAddress && (
+                                                            <button type="button" onClick={() => makeDefaultAddress(address)} className="min-h-9 px-3 border border-stone-200 text-xs font-medium text-stone-600 hover:border-stone-900 hover:text-stone-900 inline-flex items-center gap-2">
+                                                                <Star size={14} /> Default
+                                                            </button>
+                                                        )}
+                                                        <button type="button" onClick={() => removeAddress(address.id)} className="min-h-9 px-3 border border-stone-200 text-xs font-medium text-stone-600 hover:border-red-200 hover:bg-red-50 hover:text-red-700 inline-flex items-center gap-2">
+                                                            <Trash2 size={14} /> Remove
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ))}
+
+                                        {addresses.length === 0 && (
+                                            <div className="border border-dashed border-stone-300 bg-stone-50 px-4 py-6 text-center">
+                                                <MapPin className="mx-auto mb-3 text-stone-400" size={24} />
+                                                <h4 className="font-serif text-lg text-stone-900">No saved addresses yet</h4>
+                                                <p className="mt-1 text-sm text-stone-500">Open recipient management to add one.</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                <button
+                                    type="button"
+                                    onClick={() => setShowRecipientBook((current) => !current)}
+                                    className="mt-4 min-h-11 w-full border border-stone-900 px-4 text-sm font-medium text-stone-900 hover:bg-stone-900 hover:text-white transition-colors inline-flex items-center justify-center gap-2"
+                                >
+                                    {showRecipientBook ? 'Hide recipient manager' : addresses.length ? 'Manage recipients' : 'Show recipient book'}
+                                </button>
+
+                                <button
+                                    type="button"
+                                    onClick={() => setShowRecipientModal(true)}
+                                    className="mt-3 min-h-11 w-full bg-stone-900 px-4 text-sm font-medium text-white hover:bg-stone-800 transition-colors inline-flex items-center justify-center gap-2"
+                                >
+                                    <Plus size={15} /> {addresses.length ? 'Add recipient' : 'Add first recipient'}
                                 </button>
                             </div>
 
@@ -557,6 +652,66 @@ export default function Profile() {
                 </div>
 
             </main>
+
+            {showRecipientModal && (
+                <div className="fixed inset-0 z-[80] flex items-end justify-center bg-stone-950/45 px-4 py-4 backdrop-blur-sm sm:items-center" role="dialog" aria-modal="true" aria-labelledby="recipient-modal-title">
+                    <div className="w-full max-w-lg border border-stone-200 bg-[#FDFCF8] shadow-2xl">
+                        <div className="flex items-start justify-between gap-4 border-b border-stone-200 px-5 py-4">
+                            <div>
+                                <p className="text-xs uppercase tracking-widest text-stone-500">Recipient Book</p>
+                                <h2 id="recipient-modal-title" className="mt-1 font-serif text-2xl text-stone-900">Add New Recipient</h2>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={closeRecipientModal}
+                                className="flex h-11 w-11 items-center justify-center border border-stone-200 text-stone-600 transition-colors hover:border-stone-900 hover:text-stone-900"
+                                aria-label="Close recipient form"
+                            >
+                                <X size={18} />
+                            </button>
+                        </div>
+
+                        <form onSubmit={saveAddress} className="px-5 py-5">
+                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                <label className="block">
+                                    <span className="text-xs uppercase tracking-wider text-stone-500 font-medium">Label</span>
+                                    <input required value={addressForm.label} onChange={(event) => updateAddressForm('label', event.target.value)} className="mt-2 min-h-11 w-full bg-white border border-stone-200 px-3 text-stone-900 outline-none focus:border-stone-900" />
+                                </label>
+                                <label className="block">
+                                    <span className="text-xs uppercase tracking-wider text-stone-500 font-medium">Recipient</span>
+                                    <input required value={addressForm.recipientName} onChange={(event) => updateAddressForm('recipientName', event.target.value)} className="mt-2 min-h-11 w-full bg-white border border-stone-200 px-3 text-stone-900 outline-none focus:border-stone-900" />
+                                </label>
+                                <label className="block sm:col-span-2">
+                                    <span className="text-xs uppercase tracking-wider text-stone-500 font-medium">Phone Optional</span>
+                                    <input value={addressForm.phoneNumber} onChange={(event) => updateAddressForm('phoneNumber', event.target.value)} className="mt-2 min-h-11 w-full bg-white border border-stone-200 px-3 text-stone-900 outline-none focus:border-stone-900" />
+                                </label>
+                                <label className="block sm:col-span-2">
+                                    <span className="text-xs uppercase tracking-wider text-stone-500 font-medium">Delivery Address</span>
+                                    <textarea required rows={4} value={addressForm.addressLine} onChange={(event) => updateAddressForm('addressLine', event.target.value)} className="mt-2 w-full bg-white border border-stone-200 px-3 py-2 text-stone-900 outline-none focus:border-stone-900 resize-none" />
+                                </label>
+                            </div>
+
+                            <label className="mt-4 flex min-h-10 items-center gap-3 text-sm text-stone-700">
+                                <input type="checkbox" checked={addressForm.defaultAddress} onChange={(event) => updateAddressForm('defaultAddress', event.target.checked)} className="h-4 w-4 accent-stone-900" />
+                                Make default recipient
+                            </label>
+
+                            <div className="mt-5 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                                <button
+                                    type="button"
+                                    onClick={closeRecipientModal}
+                                    className="min-h-11 border border-stone-200 px-5 text-sm font-medium text-stone-700 transition-colors hover:border-stone-900 hover:text-stone-900"
+                                >
+                                    Cancel
+                                </button>
+                                <button className="min-h-11 bg-stone-900 px-5 text-sm font-medium text-white transition-colors hover:bg-stone-800 inline-flex items-center justify-center gap-2">
+                                    <Plus size={15} /> Save Recipient
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

@@ -98,17 +98,22 @@ function currency(value) {
 }
 
 function statusClass(status) {
-    if (status === 'COMPLETED' || status === 'READY_FOR_PICKUP') return 'bg-green-50 text-green-800 border-green-200';
+    if (status === 'COMPLETED' || status === 'DELIVERED' || status === 'READY_FOR_PICKUP') return 'bg-green-50 text-green-800 border-green-200';
     if (status === 'CANCELLED') return 'bg-stone-100 text-stone-500 border-stone-200';
-    if (status === 'PREPARING') return 'bg-amber-50 text-amber-800 border-amber-200';
+    if (status === 'ACCEPTED' || status === 'ARRANGING' || status === 'PREPARING') return 'bg-amber-50 text-amber-800 border-amber-200';
+    if (status === 'OUT_FOR_DELIVERY') return 'bg-stone-900 text-white border-stone-900';
     return 'bg-rose-50 text-rose-800 border-rose-200';
 }
 
 function statusLabel(status) {
     const labels = {
         PENDING: 'New',
-        PREPARING: 'Preparing',
+        ACCEPTED: 'Accepted',
+        ARRANGING: 'Arranging',
+        PREPARING: 'Arranging',
         READY_FOR_PICKUP: 'Ready for Pickup',
+        OUT_FOR_DELIVERY: 'Out for Delivery',
+        DELIVERED: 'Delivered',
         COMPLETED: 'Completed',
         CANCELLED: 'Cancelled',
     };
@@ -126,18 +131,19 @@ function paymentLabel(value) {
 }
 
 function nextStatus(status) {
-    if (status === 'PENDING') return 'PREPARING';
-    if (status === 'PREPARING') return 'READY_FOR_PICKUP';
-    if (status === 'READY_FOR_PICKUP') return 'COMPLETED';
+    if (status === 'PENDING') return 'ACCEPTED';
+    if (status === 'ACCEPTED') return 'ARRANGING';
+    if (status === 'ARRANGING' || status === 'PREPARING') return 'READY_FOR_PICKUP';
     return null;
 }
 
 function nextStatusLabel(status) {
     const next = nextStatus(status);
     if (!next) return '';
-    if (next === 'PREPARING') return 'Start Preparing';
+    if (next === 'ACCEPTED') return 'Accept Order';
+    if (next === 'ARRANGING') return 'Mark Arranging';
     if (next === 'READY_FOR_PICKUP') return 'Mark Ready';
-    return 'Complete';
+    return '';
 }
 
 function deliveryLabel(order) {
@@ -226,7 +232,7 @@ export default function SellerCentre() {
         const liveCount = products.filter((product) => product.inStock).length;
         const soldOutCount = products.length - liveCount;
         const inventoryValue = products.reduce((sum, product) => sum + Number(product.price || 0), 0);
-        const actionableOrders = orders.filter((order) => !['COMPLETED', 'CANCELLED'].includes(order.status));
+        const actionableOrders = orders.filter((order) => !['DELIVERED', 'COMPLETED', 'CANCELLED'].includes(order.status));
         const today = new Date().toISOString().slice(0, 10);
         const dueToday = actionableOrders.filter((order) => order.deliveryDate === today).length;
 

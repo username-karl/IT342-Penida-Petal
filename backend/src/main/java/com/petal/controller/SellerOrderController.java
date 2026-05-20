@@ -3,6 +3,7 @@ package com.petal.controller;
 import com.petal.dto.ApiResponse;
 import com.petal.dto.SellerOrderResponse;
 import com.petal.dto.SellerOrderStatusRequest;
+import com.petal.dto.ShippingUpdateRequest;
 import com.petal.entity.User;
 import com.petal.service.OrderService;
 import jakarta.validation.Valid;
@@ -55,6 +56,18 @@ public class SellerOrderController {
                 .success(true)
                 .message("Order status updated successfully")
                 .data(orderService.updateSellerOrderStatus(seller, id, request))
+                .build());
+    }
+
+    @PutMapping("/{id}/shipping")
+    public ResponseEntity<ApiResponse<SellerOrderResponse>> updateSellerShipping(
+            @AuthenticationPrincipal User seller,
+            @PathVariable Long id,
+            @Valid @RequestBody ShippingUpdateRequest request) {
+        return ResponseEntity.ok(ApiResponse.<SellerOrderResponse>builder()
+                .success(true)
+                .message("Shipping status updated successfully")
+                .data(orderService.updateSellerShipping(seller, id, request))
                 .build());
     }
 }

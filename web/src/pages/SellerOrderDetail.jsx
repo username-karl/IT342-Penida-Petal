@@ -1,17 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, ClipboardList, Leaf } from 'lucide-react';
+import OrderStatusBadge from '../components/OrderStatusBadge';
+import ShippingInfoCard from '../components/ShippingInfoCard';
+import TrackingTimeline from '../components/TrackingTimeline';
+import UpdateShippingStatusForm from '../components/UpdateShippingStatusForm';
 import { ordersAPI } from '../services/api';
 
 const paymentLabels = { COD: 'COD', GCASH: 'GCash', MAYA: 'Maya', CARD: 'Card' };
-const statusLabels = {
-    PENDING: 'New',
-    PREPARING: 'Preparing',
-    READY_FOR_PICKUP: 'Ready for Pickup',
-    COMPLETED: 'Completed',
-    CANCELLED: 'Cancelled',
-};
-
 function currency(value) {
     return `PHP ${Number(value || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
@@ -19,36 +15,13 @@ function currency(value) {
 function deliveryLabel(order) {
     if (!order?.deliveryDate) return order?.timeSlot || 'No delivery window';
     const date = new Date(`${order.deliveryDate}T00:00:00`);
-    return `${date.toLocaleDateString('en-PH', { month: 'long', day: 'numeric', year: 'numeric' })} · ${order.timeSlot}`;
-}
-
-function statusClass(status) {
-    if (status === 'COMPLETED' || status === 'READY_FOR_PICKUP') return 'bg-green-50 text-green-800 border-green-200';
-    if (status === 'CANCELLED') return 'bg-stone-100 text-stone-500 border-stone-200';
-    if (status === 'PREPARING') return 'bg-amber-50 text-amber-800 border-amber-200';
-    return 'bg-rose-50 text-rose-800 border-rose-200';
-}
-
-function nextStatus(status) {
-    if (status === 'PENDING') return 'PREPARING';
-    if (status === 'PREPARING') return 'READY_FOR_PICKUP';
-    if (status === 'READY_FOR_PICKUP') return 'COMPLETED';
-    return null;
-}
-
-function nextStatusLabel(status) {
-    const next = nextStatus(status);
-    if (next === 'PREPARING') return 'Start Preparing';
-    if (next === 'READY_FOR_PICKUP') return 'Mark Ready';
-    if (next === 'COMPLETED') return 'Complete Order';
-    return '';
+    return `${date.toLocaleDateString('en-PH', { month: 'long', day: 'numeric', year: 'numeric' })} / ${order.timeSlot}`;
 }
 
 export default function SellerOrderDetail() {
     const { id } = useParams();
     const [order, setOrder] = useState(null);
     const [loading, setLoading] = useState(true);
-    const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
 
     useEffect(() => {
@@ -68,19 +41,10 @@ export default function SellerOrderDetail() {
         loadOrder();
     }, [id]);
 
-    const advanceStatus = async () => {
-        const next = nextStatus(order?.status);
-        if (!next) return;
-        setSaving(true);
+    const updateShipping = async (data) => {
         setError('');
-        try {
-            const response = await ordersAPI.updateSellerOrderStatus(order.id, next);
-            setOrder(response.data.data);
-        } catch (err) {
-            setError(err.response?.data?.message || err.message || 'Unable to update order');
-        } finally {
-            setSaving(false);
-        }
+        const response = await ordersAPI.updateSellerShipping(order.id, data);
+        setOrder(response.data.data);
     };
 
     return (
@@ -102,8 +66,9 @@ export default function SellerOrderDetail() {
                 ) : error ? (
                     <div className="border border-red-200 bg-red-50 p-5 text-sm text-red-700">{error}</div>
                 ) : order && (
-                    <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6">
-                        <section className="bg-white border border-stone-200">
+                    <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
+                        <div className="order-2 space-y-6 lg:order-1">
+                            <section className="self-start bg-white border border-stone-200">
                             <div className="p-6 border-b border-stone-100">
                                 <p className="text-xs uppercase tracking-[0.2em] text-stone-400">{order.orderNumber}</p>
                                 <h1 className="mt-2 font-serif text-4xl">Fulfillment Details</h1>
@@ -114,18 +79,23 @@ export default function SellerOrderDetail() {
                                     <div key={`${order.id}-${item.productId}`} className="p-5 flex items-center justify-between gap-4">
                                         <div>
                                             <h2 className="font-serif text-2xl">{item.productName}</h2>
-                                            <p className="mt-1 text-sm text-stone-500">Qty {item.quantity} · {currency(item.unitPrice)} each</p>
+                                            <p className="mt-1 text-sm text-stone-500">Qty {item.quantity} / {currency(item.unitPrice)} each</p>
                                         </div>
                                         <p className="font-semibold whitespace-nowrap">{currency(item.lineTotal)}</p>
                                     </div>
                                 ))}
                             </div>
-                        </section>
+                            </section>
+                            <section>
+                                <h2 className="mb-4 font-serif text-2xl text-stone-950">Logistics Tracking</h2>
+                                <TrackingTimeline events={order.shipping?.events || []} />
+                            </section>
+                        </div>
 
-                        <aside className="space-y-4">
+                        <aside className="order-1 space-y-4 lg:order-2">
                             <div className="bg-white border border-stone-200 p-5">
                                 <div className="flex items-center justify-between">
-                                    <span className={`inline-flex border px-2.5 py-1 text-xs font-medium ${statusClass(order.status)}`}>{statusLabels[order.status] || order.status}</span>
+                                    <OrderStatusBadge status={order.status} compact />
                                     <ClipboardList size={20} />
                                 </div>
                                 <dl className="mt-5 space-y-3 text-sm">
@@ -141,12 +111,9 @@ export default function SellerOrderDetail() {
                                         <p className="mt-2 text-sm text-stone-600 leading-relaxed">{order.cardMessage}</p>
                                     </div>
                                 )}
-                                {nextStatus(order.status) && (
-                                    <button onClick={advanceStatus} disabled={saving} className="mt-6 w-full h-11 bg-stone-900 text-white text-sm font-semibold hover:bg-stone-800 disabled:opacity-50">
-                                        {saving ? 'Updating...' : nextStatusLabel(order.status)}
-                                    </button>
-                                )}
                             </div>
+                            <UpdateShippingStatusForm order={order} onSubmit={updateShipping} />
+                            <ShippingInfoCard orderId={order.id} shipping={order.shipping} />
                         </aside>
                     </div>
                 )}

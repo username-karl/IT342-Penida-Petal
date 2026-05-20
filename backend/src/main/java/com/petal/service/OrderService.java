@@ -7,11 +7,15 @@ import com.petal.dto.OrderResponse;
 import com.petal.dto.SellerOrderItemResponse;
 import com.petal.dto.SellerOrderResponse;
 import com.petal.dto.SellerOrderStatusRequest;
+import com.petal.dto.ShippingInfoResponse;
+import com.petal.dto.ShippingUpdateRequest;
+import com.petal.dto.TrackingEventResponse;
 import com.petal.entity.CartItem;
 import com.petal.entity.Florist;
 import com.petal.entity.Order;
 import com.petal.entity.OrderItem;
 import com.petal.entity.Product;
+import com.petal.entity.TrackingEvent;
 import com.petal.entity.User;
 import com.petal.repository.CartItemRepository;
 import com.petal.repository.OrderRepository;
@@ -20,7 +24,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.Comparator;
+import java.util.Map;
 import java.util.List;
 import java.util.Set;
 
@@ -33,10 +39,20 @@ public class OrderService {
     private final FloristService floristService;
     private static final Set<String> SELLER_STATUSES = Set.of(
             "PENDING",
-            "PREPARING",
+            "ACCEPTED",
+            "ARRANGING",
             "READY_FOR_PICKUP",
-            "COMPLETED",
+            "OUT_FOR_DELIVERY",
+            "DELIVERED",
             "CANCELLED");
+    private static final Map<String, String> NEXT_STATUSES = Map.of(
+            "PENDING", "ACCEPTED",
+            "ACCEPTED", "ARRANGING",
+            "ARRANGING", "READY_FOR_PICKUP",
+            "READY_FOR_PICKUP", "OUT_FOR_DELIVERY",
+            "OUT_FOR_DELIVERY", "DELIVERED");
+    private static final Set<String> CANCELLABLE_STATUSES = Set.of("PENDING", "ACCEPTED", "ARRANGING");
+    private static final Set<String> SHIPPING_DETAIL_STATUSES = Set.of("OUT_FOR_DELIVERY", "DELIVERED");
 
     @Transactional
     public OrderResponse createOrder(User user, CreateOrderRequest request) {
@@ -72,6 +88,7 @@ public class OrderService {
                     .build();
             order.getItems().add(orderItem);
         }
+        addTrackingEvent(order, "PENDING", null, LocalDateTime.now());
 
         Order savedOrder = orderRepository.save(order);
         cartItemRepository.deleteAll(cartItems);
@@ -138,7 +155,45 @@ public class OrderService {
             throw new IllegalArgumentException("Order not found for this seller");
         }
 
+        ensureSingleSellerOrder(order, florist.getId());
+        if (SHIPPING_DETAIL_STATUSES.contains(status)) {
+            throw new IllegalArgumentException("Shipping updates require tracking details");
+        }
+        validateStatusTransition(order.getStatus(), status);
         order.setStatus(status);
+        order.setLatestShippingStatus(displayStatus(status));
+        addTrackingEvent(order, status, null, LocalDateTime.now());
+        Order savedOrder = orderRepository.save(order);
+        return toSellerOrderResponse(savedOrder, florist.getId());
+    }
+
+    @Transactional
+    public SellerOrderResponse updateSellerShipping(
+            User seller,
+            Long orderId,
+            ShippingUpdateRequest request) {
+        Florist florist = floristService.getOrCreateForUser(seller);
+        String status = normalizeStatus(request.getDeliveryStatus());
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new IllegalArgumentException("Order not found for this seller"));
+
+        if (!hasSellerItems(order, florist.getId())) {
+            throw new IllegalArgumentException("Order not found for this seller");
+        }
+
+        ensureSingleSellerOrder(order, florist.getId());
+        validateStatusTransition(order.getStatus(), status);
+        order.setCourierName(request.getCourierName());
+        order.setTrackingNumber(request.getTrackingNumber());
+        order.setEstimatedDeliveryDate(request.getEstimatedDeliveryDate());
+        order.setStatus(status);
+        order.setLatestShippingStatus(displayStatus(status));
+        addTrackingEvent(
+                order,
+                status,
+                request.getTrackingMessage(),
+                request.getTimestamp() == null ? LocalDateTime.now() : request.getTimestamp());
+
         Order savedOrder = orderRepository.save(order);
         return toSellerOrderResponse(savedOrder, florist.getId());
     }
@@ -170,6 +225,7 @@ public class OrderService {
                         .map(item -> item.getProductName() + " x" + item.getQuantity())
                         .reduce((first, second) -> first + ", " + second)
                         .orElse("No seller items"))
+                .shipping(toShippingInfoResponse(order))
                 .items(items)
                 .build();
     }
@@ -195,7 +251,50 @@ public class OrderService {
                         .map(item -> item.getProductName() + " x" + item.getQuantity())
                         .reduce((first, second) -> first + ", " + second)
                         .orElse("No items"))
+                .shipping(toShippingInfoResponse(order))
                 .items(items)
+                .build();
+    }
+
+    private ShippingInfoResponse toShippingInfoResponse(Order order) {
+        List<TrackingEventResponse> events = order.getTrackingEvents().stream()
+                .sorted(Comparator.comparing(TrackingEvent::getTimestamp, Comparator.nullsLast(LocalDateTime::compareTo))
+                        .thenComparing(event -> workflowRank(event.getStatus()))
+                        .reversed())
+                .map(event -> TrackingEventResponse.builder()
+                        .id(event.getId())
+                        .status(event.getStatus())
+                        .description(event.getDescription())
+                        .timestamp(event.getTimestamp())
+                        .build())
+                .toList();
+        String currentStatus = order.getStatus() == null || order.getStatus().isBlank()
+                ? "PENDING"
+                : normalizeStatus(order.getStatus());
+        String latestStatus = order.getLatestShippingStatus() == null || order.getLatestShippingStatus().isBlank()
+                ? displayStatus(currentStatus)
+                : order.getLatestShippingStatus();
+        if (events.isEmpty()) {
+            events = List.of(TrackingEventResponse.builder()
+                    .status(latestStatus)
+                    .description(defaultTrackingMessage(currentStatus))
+                    .timestamp(LocalDateTime.now())
+                    .build());
+        }
+
+        String trackingNumber = order.getTrackingNumber();
+        if (trackingNumber == null || trackingNumber.isBlank()) {
+            trackingNumber = "PETAL-" + String.format("%04d", order.getId());
+        }
+
+        return ShippingInfoResponse.builder()
+                .courierName(displayCourier(order.getCourierName()))
+                .trackingNumber(trackingNumber)
+                .estimatedDeliveryDate(order.getEstimatedDeliveryDate() == null
+                        ? order.getDeliveryDate()
+                        : order.getEstimatedDeliveryDate())
+                .latestStatus(latestStatus)
+                .events(events)
                 .build();
     }
 
@@ -229,12 +328,45 @@ public class OrderService {
                 .anyMatch(item -> floristId.equals(item.getProduct().getFloristId()));
     }
 
+    private void ensureSingleSellerOrder(Order order, Long floristId) {
+        boolean hasOtherSellerItems = order.getItems().stream()
+                .anyMatch(item -> !floristId.equals(item.getProduct().getFloristId()));
+        if (hasOtherSellerItems) {
+            throw new IllegalArgumentException("Order cannot be updated from seller view");
+        }
+    }
+
     private String normalizeStatus(String status) {
         String normalized = status == null ? "" : status.trim().toUpperCase();
+        if ("PREPARING".equals(normalized)) {
+            normalized = "ARRANGING";
+        }
+        if ("SHIPPED".equals(normalized)) {
+            normalized = "OUT_FOR_DELIVERY";
+        }
+        if ("COMPLETED".equals(normalized)) {
+            normalized = "DELIVERED";
+        }
         if (!SELLER_STATUSES.contains(normalized)) {
             throw new IllegalArgumentException("Unsupported order status");
         }
         return normalized;
+    }
+
+    private void validateStatusTransition(String currentStatus, String nextStatus) {
+        String current = normalizeStatus(currentStatus);
+        if ("PENDING".equals(nextStatus)) {
+            throw new IllegalArgumentException("Invalid order status transition");
+        }
+        if ("CANCELLED".equals(nextStatus)) {
+            if (CANCELLABLE_STATUSES.contains(current)) {
+                return;
+            }
+            throw new IllegalArgumentException("Invalid order status transition");
+        }
+        if (!nextStatus.equals(NEXT_STATUSES.get(current))) {
+            throw new IllegalArgumentException("Invalid order status transition");
+        }
     }
 
     private String normalizePaymentMethod(String paymentMethod) {
@@ -248,5 +380,66 @@ public class OrderService {
 
     private String displayPaymentMethod(String paymentMethod) {
         return paymentMethod == null || paymentMethod.isBlank() ? "COD" : paymentMethod;
+    }
+
+    private String displayCourier(String courierName) {
+        return courierName == null || courierName.isBlank() ? "Petal Local Delivery" : courierName;
+    }
+
+    private String displayStatus(String status) {
+        if (status == null || status.isBlank()) return "Pending";
+        return switch (status) {
+            case "PENDING" -> "Pending";
+            case "ACCEPTED" -> "Accepted";
+            case "ARRANGING", "PREPARING" -> "Arranging";
+            case "READY_FOR_PICKUP" -> "Ready for pickup";
+            case "SHIPPED", "OUT_FOR_DELIVERY" -> "Out for delivery";
+            case "DELIVERED", "COMPLETED" -> "Delivered";
+            case "CANCELLED" -> "Cancelled";
+            default -> status;
+        };
+    }
+
+    private void addTrackingEvent(Order order, String status, String message, LocalDateTime timestamp) {
+        order.getTrackingEvents().add(TrackingEvent.builder()
+                .order(order)
+                .status(displayStatus(status))
+                .description(resolveTrackingMessage(status, message))
+                .timestamp(timestamp)
+                .build());
+    }
+
+    private String resolveTrackingMessage(String status, String message) {
+        if (message != null && !message.isBlank()) {
+            return message.trim();
+        }
+        return defaultTrackingMessage(status);
+    }
+
+    private String defaultTrackingMessage(String status) {
+        return switch (status) {
+            case "PENDING" -> "Your order has been received and is waiting for florist confirmation.";
+            case "ACCEPTED" -> "The florist has accepted your order.";
+            case "ARRANGING", "PREPARING" -> "The florist is preparing your bouquet.";
+            case "READY_FOR_PICKUP" -> "Your bouquet is ready for courier pickup.";
+            case "OUT_FOR_DELIVERY" -> "Your bouquet is on the way to the recipient.";
+            case "DELIVERED", "COMPLETED" -> "Your bouquet has been successfully delivered to the recipient.";
+            case "CANCELLED" -> "This order has been cancelled.";
+            default -> "Tracking information has been updated.";
+        };
+    }
+
+    private int workflowRank(String status) {
+        String normalized = status == null ? "" : status.trim().toUpperCase().replace(" ", "_");
+        return switch (normalized) {
+            case "PENDING" -> 1;
+            case "ACCEPTED" -> 2;
+            case "ARRANGING", "PREPARING" -> 3;
+            case "READY_FOR_PICKUP" -> 4;
+            case "OUT_FOR_DELIVERY", "SHIPPED" -> 5;
+            case "DELIVERED", "COMPLETED" -> 6;
+            case "CANCELLED" -> 7;
+            default -> 0;
+        };
     }
 }

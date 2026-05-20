@@ -10,7 +10,9 @@ import Checkout from './pages/Checkout';
 import CheckoutConfirmation from './pages/CheckoutConfirmation';
 import ProductDetail from './pages/ProductDetail';
 import Profile from './pages/Profile';
+import PurchaseHistory from './pages/PurchaseHistory';
 import OrderDetail from './pages/OrderDetail';
+import ShippingInformation from './pages/ShippingInformation';
 import ShopByMood from './pages/ShopByMood';
 import SellerCentre from './pages/SellerCentre';
 import SellerEducation from './pages/SellerEducation';
@@ -42,10 +44,26 @@ export default function App() {
                         }
                     />
                     <Route
+                        path="/purchase-history"
+                        element={
+                            <ProtectedRoute>
+                                <PurchaseHistory />
+                            </ProtectedRoute>
+                        }
+                    />
+                    <Route
                         path="/orders/:id"
                         element={
                             <ProtectedRoute>
                                 <OrderDetail />
+                            </ProtectedRoute>
+                        }
+                    />
+                    <Route
+                        path="/orders/:id/shipping"
+                        element={
+                            <ProtectedRoute>
+                                <ShippingInformation />
                             </ProtectedRoute>
                         }
                     />
