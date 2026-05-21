@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, Camera, Check, Copy, Leaf } from 'lucide-react';
-import TrackingTimeline from '../components/TrackingTimeline';
+import OrderTrackingStepper from '../components/OrderTrackingStepper';
 import { ordersAPI } from '../services/api';
 
 function formatDate(value) {
@@ -120,7 +120,7 @@ export default function ShippingInformation() {
 
                         <section>
                             <h2 className="mb-4 font-serif text-2xl text-stone-950">Logistics Tracking</h2>
-                            <TrackingTimeline events={shipping?.events || []} />
+                            <OrderTrackingStepper status={order?.status} events={shipping?.events || []} />
                         </section>
 
                         <OrderPhoto title="Bouquet preparation" imageUrl={order?.fulfillmentImageUrl || shipping?.fulfillmentImageUrl} />
