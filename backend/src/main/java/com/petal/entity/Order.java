@@ -68,6 +68,12 @@ public class Order {
 
     private String latestShippingStatus;
 
+    @Column(name = "fulfillment_image_url")
+    private String fulfillmentImageUrl;
+
+    @Column(name = "proof_image_url")
+    private String proofImageUrl;
+
     @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal totalAmount;
 

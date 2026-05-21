@@ -25,6 +25,8 @@ public class BuyerOrderResponse {
     private String status;
     private BigDecimal totalAmount;
     private String itemSummary;
+    private String fulfillmentImageUrl;
+    private String proofImageUrl;
     private ShippingInfoResponse shipping;
     private List<BuyerOrderItemResponse> items;
 }

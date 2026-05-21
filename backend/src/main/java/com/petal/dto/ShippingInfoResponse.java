@@ -17,5 +17,7 @@ public class ShippingInfoResponse {
     private String trackingNumber;
     private LocalDate estimatedDeliveryDate;
     private String latestStatus;
+    private String fulfillmentImageUrl;
+    private String proofImageUrl;
     private List<TrackingEventResponse> events;
 }

@@ -81,6 +81,20 @@ export const ordersAPI = {
     getSellerOrder: (id) => api.get(`/seller/orders/${id}`),
     updateSellerOrderStatus: (id, status) => api.put(`/seller/orders/${id}/status`, { status }),
     updateSellerShipping: (id, data) => api.put(`/seller/orders/${id}/shipping`, data),
+    uploadFulfillmentPhoto: (id, file) => {
+        const formData = new FormData();
+        formData.append('file', file);
+        return api.post(`/orders/${id}/fulfillment-photo`, formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+        });
+    },
+    uploadProofPhoto: (id, file) => {
+        const formData = new FormData();
+        formData.append('file', file);
+        return api.post(`/orders/${id}/proof`, formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+        });
+    },
 };
 
 export default api;

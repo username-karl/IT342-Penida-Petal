@@ -20,12 +20,16 @@ import com.petal.entity.User;
 import com.petal.repository.CartItemRepository;
 import com.petal.repository.OrderRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Comparator;
+import java.util.Locale;
 import java.util.Map;
 import java.util.List;
 import java.util.Set;
@@ -37,6 +41,7 @@ public class OrderService {
     private final CartItemRepository cartItemRepository;
     private final OrderRepository orderRepository;
     private final FloristService floristService;
+    private final OrderImageStorageService orderImageStorageService;
     private static final Set<String> SELLER_STATUSES = Set.of(
             "PENDING",
             "ACCEPTED",
@@ -53,6 +58,9 @@ public class OrderService {
             "OUT_FOR_DELIVERY", "DELIVERED");
     private static final Set<String> CANCELLABLE_STATUSES = Set.of("PENDING", "ACCEPTED", "ARRANGING");
     private static final Set<String> SHIPPING_DETAIL_STATUSES = Set.of("OUT_FOR_DELIVERY", "DELIVERED");
+    private static final Set<String> FULFILLMENT_PHOTO_STATUSES = Set.of("ARRANGING", "READY_FOR_PICKUP", "OUT_FOR_DELIVERY", "DELIVERED");
+    private static final Set<String> PHOTO_CONTENT_TYPES = Set.of("image/png", "image/jpeg", "image/jpg", "image/webp");
+    private static final long MAX_PHOTO_BYTES = 5L * 1024L * 1024L;
 
     @Transactional
     public OrderResponse createOrder(User user, CreateOrderRequest request) {
@@ -198,6 +206,36 @@ public class OrderService {
         return toSellerOrderResponse(savedOrder, florist.getId());
     }
 
+    @Transactional
+    public SellerOrderResponse uploadFulfillmentPhoto(User seller, Long orderId, MultipartFile file) {
+        validatePhotoFile(file);
+        Florist florist = requireUploadFlorist(seller);
+        Order order = sellerOwnedSingleOrder(orderId, florist.getId());
+        String status = normalizeStatus(order.getStatus());
+        if (!FULFILLMENT_PHOTO_STATUSES.contains(status)) {
+            throw new IllegalArgumentException("Fulfillment photo is allowed once the order is being arranged");
+        }
+        String imageUrl = orderImageStorageService.store(file, "fulfillment");
+        order.setFulfillmentImageUrl(imageUrl);
+        Order savedOrder = orderRepository.save(order);
+        return toSellerOrderResponse(savedOrder, florist.getId());
+    }
+
+    @Transactional
+    public SellerOrderResponse uploadProofPhoto(User seller, Long orderId, MultipartFile file) {
+        validatePhotoFile(file);
+        Florist florist = requireUploadFlorist(seller);
+        Order order = sellerOwnedSingleOrder(orderId, florist.getId());
+        String status = normalizeStatus(order.getStatus());
+        if (!"DELIVERED".equals(status)) {
+            throw new IllegalArgumentException("Proof of delivery photo is allowed after the order is delivered");
+        }
+        String imageUrl = orderImageStorageService.store(file, "proof");
+        order.setProofImageUrl(imageUrl);
+        Order savedOrder = orderRepository.save(order);
+        return toSellerOrderResponse(savedOrder, florist.getId());
+    }
+
     private SellerOrderResponse toSellerOrderResponse(Order order, Long floristId) {
         List<SellerOrderItemResponse> items = order.getItems().stream()
                 .filter(item -> floristId.equals(item.getProduct().getFloristId()))
@@ -225,6 +263,8 @@ public class OrderService {
                         .map(item -> item.getProductName() + " x" + item.getQuantity())
                         .reduce((first, second) -> first + ", " + second)
                         .orElse("No seller items"))
+                .fulfillmentImageUrl(order.getFulfillmentImageUrl())
+                .proofImageUrl(order.getProofImageUrl())
                 .shipping(toShippingInfoResponse(order))
                 .items(items)
                 .build();
@@ -251,6 +291,8 @@ public class OrderService {
                         .map(item -> item.getProductName() + " x" + item.getQuantity())
                         .reduce((first, second) -> first + ", " + second)
                         .orElse("No items"))
+                .fulfillmentImageUrl(order.getFulfillmentImageUrl())
+                .proofImageUrl(order.getProofImageUrl())
                 .shipping(toShippingInfoResponse(order))
                 .items(items)
                 .build();
@@ -294,6 +336,8 @@ public class OrderService {
                         ? order.getDeliveryDate()
                         : order.getEstimatedDeliveryDate())
                 .latestStatus(latestStatus)
+                .fulfillmentImageUrl(order.getFulfillmentImageUrl())
+                .proofImageUrl(order.getProofImageUrl())
                 .events(events)
                 .build();
     }
@@ -326,6 +370,36 @@ public class OrderService {
     private boolean hasSellerItems(Order order, Long floristId) {
         return order.getItems().stream()
                 .anyMatch(item -> floristId.equals(item.getProduct().getFloristId()));
+    }
+
+    private void validatePhotoFile(MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new IllegalArgumentException("Photo file is required");
+        }
+        String contentType = file.getContentType() == null ? "" : file.getContentType().toLowerCase(Locale.ROOT);
+        if (!PHOTO_CONTENT_TYPES.contains(contentType)) {
+            throw new IllegalArgumentException("Only JPG, PNG, or WEBP images are allowed");
+        }
+        if (file.getSize() > MAX_PHOTO_BYTES) {
+            throw new IllegalArgumentException("Photo must be 5MB or smaller");
+        }
+    }
+
+    private Florist requireUploadFlorist(User seller) {
+        if (seller == null || !"ROLE_FLORIST".equals(seller.getRole())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Florist access is required");
+        }
+        return floristService.getOrCreateForUser(seller);
+    }
+
+    private Order sellerOwnedSingleOrder(Long orderId, Long floristId) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN, "Order not found for this seller"));
+        if (!hasSellerItems(order, floristId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Order not found for this seller");
+        }
+        ensureSingleSellerOrder(order, floristId);
+        return order;
     }
 
     private void ensureSingleSellerOrder(Order order, Long floristId) {

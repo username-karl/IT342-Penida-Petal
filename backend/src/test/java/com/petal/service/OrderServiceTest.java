@@ -21,6 +21,9 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpStatus;
+import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -43,6 +46,9 @@ class OrderServiceTest {
 
     @Mock
     private FloristService floristService;
+
+    @Mock
+    private OrderImageStorageService orderImageStorageService;
 
     @InjectMocks
     private OrderService orderService;
@@ -144,6 +150,8 @@ class OrderServiceTest {
         assertThat(response.getOrderNumber()).isEqualTo("PET-0025");
         assertThat(response.getRecipientAddress()).isEqualTo("Cebu Business Park");
         assertThat(response.getPaymentMethod()).isEqualTo("GCASH");
+        assertThat(response.getFulfillmentImageUrl()).isEqualTo("/uploads/order-photos/prep.jpg");
+        assertThat(response.getProofImageUrl()).isEqualTo("/uploads/order-photos/proof.jpg");
         assertThat(response.getItems()).hasSize(2);
         assertThat(response.getShipping().getCourierName()).isEqualTo("Petal Cebu Rider");
         assertThat(response.getShipping().getEvents()).hasSize(1);
@@ -465,6 +473,112 @@ class OrderServiceTest {
         Mockito.verify(orderRepository, Mockito.never()).save(Mockito.any(Order.class));
     }
 
+    @Test
+    void assignedFloristCanUploadFulfillmentPhotoWhenArranging() {
+        User seller = seller();
+        Florist florist = Florist.builder().id(9L).user(seller).storeName("Karl's Studio").build();
+        Order order = singleSellerOrderWithItems(seller, "ARRANGING");
+        MockMultipartFile file = imageFile("bouquet.jpg", "image/jpeg");
+
+        Mockito.when(floristService.getOrCreateForUser(seller)).thenReturn(florist);
+        Mockito.when(orderRepository.findById(25L)).thenReturn(Optional.of(order));
+        Mockito.when(orderImageStorageService.store(file, "fulfillment")).thenReturn("/uploads/order-photos/bouquet.jpg");
+        Mockito.when(orderRepository.save(order)).thenReturn(order);
+
+        SellerOrderResponse response = orderService.uploadFulfillmentPhoto(seller, 25L, file);
+
+        assertThat(order.getFulfillmentImageUrl()).isEqualTo("/uploads/order-photos/bouquet.jpg");
+        assertThat(response.getFulfillmentImageUrl()).isEqualTo("/uploads/order-photos/bouquet.jpg");
+        verify(orderRepository).save(order);
+    }
+
+    @Test
+    void assignedFloristCanUploadProofPhotoWhenDelivered() {
+        User seller = seller();
+        Florist florist = Florist.builder().id(9L).user(seller).storeName("Karl's Studio").build();
+        Order order = singleSellerOrderWithItems(seller, "DELIVERED");
+        MockMultipartFile file = imageFile("proof.png", "image/png");
+
+        Mockito.when(floristService.getOrCreateForUser(seller)).thenReturn(florist);
+        Mockito.when(orderRepository.findById(25L)).thenReturn(Optional.of(order));
+        Mockito.when(orderImageStorageService.store(file, "proof")).thenReturn("/uploads/order-photos/proof.png");
+        Mockito.when(orderRepository.save(order)).thenReturn(order);
+
+        SellerOrderResponse response = orderService.uploadProofPhoto(seller, 25L, file);
+
+        assertThat(order.getProofImageUrl()).isEqualTo("/uploads/order-photos/proof.png");
+        assertThat(response.getProofImageUrl()).isEqualTo("/uploads/order-photos/proof.png");
+        verify(orderRepository).save(order);
+    }
+
+    @Test
+    void assignedFloristCanUploadWebpProofPhotoWhenDelivered() {
+        User seller = seller();
+        Florist florist = Florist.builder().id(9L).user(seller).storeName("Karl's Studio").build();
+        Order order = singleSellerOrderWithItems(seller, "DELIVERED");
+        MockMultipartFile file = imageFile("proof.webp", "image/webp");
+
+        Mockito.when(floristService.getOrCreateForUser(seller)).thenReturn(florist);
+        Mockito.when(orderRepository.findById(25L)).thenReturn(Optional.of(order));
+        Mockito.when(orderImageStorageService.store(file, "proof")).thenReturn("/uploads/order-photos/proof.webp");
+        Mockito.when(orderRepository.save(order)).thenReturn(order);
+
+        SellerOrderResponse response = orderService.uploadProofPhoto(seller, 25L, file);
+
+        assertThat(order.getProofImageUrl()).isEqualTo("/uploads/order-photos/proof.webp");
+        assertThat(response.getProofImageUrl()).isEqualTo("/uploads/order-photos/proof.webp");
+        verify(orderRepository).save(order);
+    }
+
+    @Test
+    void buyerCannotUploadOrderPhotos() {
+        User buyer = User.builder().id(2L).name("Mikaela Santos").role("ROLE_BUYER").build();
+
+        assertThatThrownBy(() -> orderService.uploadFulfillmentPhoto(buyer, 25L, imageFile("bouquet.jpg", "image/jpeg")))
+                .isInstanceOf(ResponseStatusException.class)
+                .extracting("statusCode")
+                .isEqualTo(HttpStatus.FORBIDDEN);
+        assertThatThrownBy(() -> orderService.uploadProofPhoto(buyer, 25L, imageFile("proof.jpg", "image/jpeg")))
+                .isInstanceOf(ResponseStatusException.class)
+                .extracting("statusCode")
+                .isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    @Test
+    void unassignedFloristCannotUploadOrderPhotos() {
+        User seller = seller();
+        Florist florist = Florist.builder().id(99L).user(seller).storeName("Other Studio").build();
+        Mockito.when(floristService.getOrCreateForUser(seller)).thenReturn(florist);
+        Mockito.when(orderRepository.findById(25L)).thenReturn(Optional.of(singleSellerOrderWithItems(seller, "ARRANGING")));
+
+        assertThatThrownBy(() -> orderService.uploadFulfillmentPhoto(seller, 25L, imageFile("bouquet.jpg", "image/jpeg")))
+                .isInstanceOf(ResponseStatusException.class)
+                .extracting("statusCode")
+                .isEqualTo(HttpStatus.FORBIDDEN);
+        assertThatThrownBy(() -> orderService.uploadProofPhoto(seller, 25L, imageFile("proof.jpg", "image/jpeg")))
+                .isInstanceOf(ResponseStatusException.class)
+                .extracting("statusCode")
+                .isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    @Test
+    void uploadPhotoRejectsMissingFile() {
+        User seller = seller();
+
+        assertThatThrownBy(() -> orderService.uploadFulfillmentPhoto(seller, 25L, null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Photo file is required");
+    }
+
+    @Test
+    void uploadPhotoRejectsInvalidContentType() {
+        User seller = seller();
+
+        assertThatThrownBy(() -> orderService.uploadFulfillmentPhoto(seller, 25L, imageFile("note.txt", "text/plain")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Only JPG, PNG, or WEBP images are allowed");
+    }
+
     private User seller() {
         return User.builder()
                 .id(4L)
@@ -472,6 +586,10 @@ class OrderServiceTest {
                 .email("karl@petal.test")
                 .role("ROLE_FLORIST")
                 .build();
+    }
+
+    private MockMultipartFile imageFile(String filename, String contentType) {
+        return new MockMultipartFile("file", filename, contentType, "image-bytes".getBytes());
     }
 
     private Order orderWithItems(User seller, String status) {
@@ -498,6 +616,8 @@ class OrderServiceTest {
                 .timeSlot("AM")
                 .status(status)
                 .paymentMethod("GCASH")
+                .fulfillmentImageUrl("/uploads/order-photos/prep.jpg")
+                .proofImageUrl("/uploads/order-photos/proof.jpg")
                 .totalAmount(new BigDecimal("3800.00"))
                 .build();
         order.getItems().add(OrderItem.builder()

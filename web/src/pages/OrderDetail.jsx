@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, CreditCard, Leaf, MapPin, Package } from 'lucide-react';
+import { ArrowLeft, Camera, CreditCard, Leaf, MapPin, Package } from 'lucide-react';
 import OrderStatusBadge, { getStatusLabel } from '../components/OrderStatusBadge';
 import ShippingInfoCard from '../components/ShippingInfoCard';
 import { ordersAPI } from '../services/api';
@@ -20,6 +20,33 @@ function deliveryLabel(order) {
     if (!order?.deliveryDate) return order?.timeSlot || 'Delivery pending';
     const date = new Date(`${order.deliveryDate}T00:00:00`);
     return `${date.toLocaleDateString('en-PH', { month: 'long', day: 'numeric', year: 'numeric' })} / ${order.timeSlot}`;
+}
+
+function mediaUrl(value) {
+    if (!value) return '';
+    if (value.startsWith('http://') || value.startsWith('https://') || value.startsWith('/images/')) return value;
+    if (value.startsWith('/uploads/')) return `http://localhost:8080${value}`;
+    return value;
+}
+
+function OrderPhoto({ title, imageUrl }) {
+    const [imageError, setImageError] = useState(false);
+    if (!imageUrl) return null;
+    return (
+        <section className="border border-stone-200 bg-white/80">
+            <div className="flex items-center gap-3 border-b border-stone-100 p-5">
+                <Camera size={19} className="text-stone-500" />
+                <h2 className="font-serif text-2xl text-stone-950">{title}</h2>
+            </div>
+            <div className="p-5">
+                {imageError ? (
+                    <div className="border border-dashed border-stone-300 bg-stone-50 p-6 text-sm text-stone-500">Unable to load this photo right now.</div>
+                ) : (
+                    <img src={mediaUrl(imageUrl)} alt={title} onError={() => setImageError(true)} className="max-h-[420px] w-full border border-stone-200 bg-stone-100 object-cover" />
+                )}
+            </div>
+        </section>
+    );
 }
 
 export default function OrderDetail() {
@@ -85,6 +112,9 @@ export default function OrderDetail() {
                             </section>
 
                             <ShippingInfoCard orderId={order.id} shipping={order.shipping} to={`/orders/${order.id}/shipping`} />
+
+                            <OrderPhoto title="Bouquet preparation" imageUrl={order.fulfillmentImageUrl || order.shipping?.fulfillmentImageUrl} />
+                            <OrderPhoto title="Proof of Delivery" imageUrl={order.proofImageUrl || order.shipping?.proofImageUrl} />
 
                             <section className="border border-stone-200 bg-white/80 p-5">
                                 <div className="flex items-center gap-3">
