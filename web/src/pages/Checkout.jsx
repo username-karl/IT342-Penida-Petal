@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Calendar, Check, CreditCard, Leaf, MessageSquare, MapPin, Plus, User } from 'lucide-react';
-import { addressesAPI, cartAPI, ordersAPI } from '../services/api';
+import { addressesAPI, cartAPI, ordersAPI, slotsAPI } from '../services/api';
 
 const formatPeso = (value) => `₱${Number(value || 0).toLocaleString('en-PH', {
     minimumFractionDigits: 2,
@@ -32,6 +32,9 @@ export default function Checkout() {
     const [saveAddress, setSaveAddress] = useState(false);
     const [addressLabel, setAddressLabel] = useState('Home');
     const [phoneNumber, setPhoneNumber] = useState('');
+    const [slotAvailability, setSlotAvailability] = useState(null);
+    const [availabilityLoading, setAvailabilityLoading] = useState(false);
+    const [availabilityError, setAvailabilityError] = useState('');
     const [formData, setFormData] = useState({
         recipientName: '',
         recipientAddress: '',
@@ -69,8 +72,62 @@ export default function Checkout() {
         loadCheckout();
     }, []);
 
+    const selectedFloristId = useMemo(() => cart.items[0]?.floristId || null, [cart.items]);
+    const currentSlotAvailability = slotAvailability?.[formData.timeSlot.toLowerCase()];
+    const currentSlotUnavailable = Boolean(slotAvailability && !currentSlotAvailability?.available);
     const cardCharacters = formData.cardMessage.length;
-    const canSubmit = useMemo(() => cart.items.length > 0 && !submitting, [cart.items.length, submitting]);
+    const canSubmit = useMemo(
+        () => cart.items.length > 0 && !submitting && !availabilityLoading && !currentSlotUnavailable,
+        [availabilityLoading, cart.items.length, currentSlotUnavailable, submitting]
+    );
+
+    useEffect(() => {
+        if (!selectedFloristId || !formData.deliveryDate) {
+            setSlotAvailability(null);
+            return;
+        }
+
+        let cancelled = false;
+
+        const loadAvailability = async () => {
+            setAvailabilityLoading(true);
+            setAvailabilityError('');
+
+            try {
+                const response = await slotsAPI.getAvailability({
+                    floristId: selectedFloristId,
+                    date: formData.deliveryDate,
+                });
+                if (cancelled) return;
+
+                const availability = response.data.data;
+                setSlotAvailability(availability);
+
+                const selectedSlot = availability?.[formData.timeSlot.toLowerCase()];
+                if (selectedSlot && !selectedSlot.available) {
+                    const fallback = ['AM', 'PM'].find((slot) => availability?.[slot.toLowerCase()]?.available);
+                    if (fallback) {
+                        setFormData((current) => ({ ...current, timeSlot: fallback }));
+                    }
+                }
+            } catch (err) {
+                if (!cancelled) {
+                    setSlotAvailability(null);
+                    setAvailabilityError(err.response?.data?.message || err.message || 'Unable to load delivery availability');
+                }
+            } finally {
+                if (!cancelled) {
+                    setAvailabilityLoading(false);
+                }
+            }
+        };
+
+        loadAvailability();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [formData.deliveryDate, selectedFloristId]);
 
     const updateField = (field, value) => {
         setFormData((current) => ({ ...current, [field]: value }));
@@ -97,6 +154,11 @@ export default function Checkout() {
         setError('');
 
         try {
+            if (currentSlotUnavailable) {
+                setError('This florist is fully booked for this date. Please choose another date.');
+                setSubmitting(false);
+                return;
+            }
             if (saveAddress && !selectedAddressId) {
                 const response = await addressesAPI.createAddress({
                     label: addressLabel || 'Saved address',
@@ -110,7 +172,10 @@ export default function Checkout() {
             const response = await ordersAPI.createOrder(formData);
             navigate('/checkout/confirmation', { state: { order: response.data.data } });
         } catch (err) {
-            setError(err.response?.data?.message || err.message || 'Unable to place order');
+            const message = err.response?.data?.message || err.message || 'Unable to place order';
+            setError(message.includes('fully booked')
+                ? 'This florist is fully booked for this date. Please choose another date.'
+                : message);
         } finally {
             setSubmitting(false);
         }
@@ -262,20 +327,35 @@ export default function Checkout() {
                                     <h2 className="text-3xl font-serif text-stone-900">Time Slot</h2>
                                 </div>
                                 <div className="grid grid-cols-2 gap-3">
-                                    {['AM', 'PM'].map((slot) => (
-                                        <label key={slot} className={`h-14 border flex items-center justify-center cursor-pointer ${formData.timeSlot === slot ? 'border-stone-900 bg-stone-900 text-white' : 'border-stone-200 bg-[#FDFCF8] text-stone-600 hover:border-stone-500'}`}>
+                                    {['AM', 'PM'].map((slot) => {
+                                        const availability = slotAvailability?.[slot.toLowerCase()];
+                                        const unavailable = Boolean(slotAvailability && !availability?.available);
+                                        return (
+                                        <label key={slot} className={`min-h-14 border flex flex-col items-center justify-center text-center transition-colors ${unavailable ? 'cursor-not-allowed border-stone-200 bg-stone-100 text-stone-400' : formData.timeSlot === slot ? 'cursor-pointer border-stone-900 bg-stone-900 text-white' : 'cursor-pointer border-stone-200 bg-[#FDFCF8] text-stone-600 hover:border-stone-500'}`}>
                                             <input
                                                 type="radio"
                                                 name="timeSlot"
                                                 value={slot}
                                                 checked={formData.timeSlot === slot}
+                                                disabled={unavailable}
                                                 onChange={(event) => updateField('timeSlot', event.target.value)}
                                                 className="hidden"
                                             />
-                                            {slot === 'AM' ? 'Morning (AM)' : 'Afternoon (PM)'}
+                                            <span>{slot === 'AM' ? 'Morning (AM)' : 'Afternoon (PM)'}</span>
+                                            {availability && (
+                                                <span className={`mt-1 text-[11px] ${formData.timeSlot === slot && !unavailable ? 'text-white/70' : 'text-stone-500'}`}>
+                                                    {availability.available ? `${availability.remaining} remaining` : 'Unavailable'}
+                                                </span>
+                                            )}
                                         </label>
-                                    ))}
+                                    )})}
                                 </div>
+                                {availabilityLoading && (
+                                    <p className="mt-3 text-xs text-stone-500">Checking florist availability...</p>
+                                )}
+                                {availabilityError && (
+                                    <p className="mt-3 text-xs text-red-600">{availabilityError}</p>
+                                )}
                             </div>
 
                             <div>

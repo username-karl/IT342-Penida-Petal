@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
@@ -39,4 +40,16 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
             where o.id = :id and o.user = :user
             """)
     Optional<Order> findByIdAndUser(@Param("id") Long id, @Param("user") User user);
+
+    @Query("""
+            select count(distinct o) from Order o
+            join o.items i
+            join i.product p
+            where p.floristId = :floristId
+              and o.deliveryDate = :deliveryDate
+              and upper(o.status) <> 'CANCELLED'
+            """)
+    long countDistinctActiveOrdersByFloristIdAndDeliveryDate(
+            @Param("floristId") Long floristId,
+            @Param("deliveryDate") LocalDate deliveryDate);
 }

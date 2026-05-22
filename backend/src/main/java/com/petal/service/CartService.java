@@ -81,6 +81,7 @@ public class CartService {
         return CartItemResponse.builder()
                 .id(cartItem.getId())
                 .productId(product.getId())
+                .floristId(product.getFloristId())
                 .productName(product.getName())
                 .productImageUrl(product.getImageUrl())
                 .floristName(product.getFloristName())

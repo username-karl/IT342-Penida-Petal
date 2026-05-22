@@ -50,6 +50,9 @@ class OrderServiceTest {
     @Mock
     private OrderImageStorageService orderImageStorageService;
 
+    @Mock
+    private DeliverySlotAvailabilityService deliverySlotAvailabilityService;
+
     @InjectMocks
     private OrderService orderService;
 
@@ -89,10 +92,81 @@ class OrderServiceTest {
         ArgumentCaptor<Order> orderCaptor = ArgumentCaptor.forClass(Order.class);
         Mockito.verify(orderRepository).save(orderCaptor.capture());
         Order savedOrder = orderCaptor.getValue();
+        Mockito.verify(deliverySlotAvailabilityService).validateOrderSlot(buyer, 9L, request.getDeliveryDate(), "AM");
         assertThat(savedOrder.getTrackingEvents()).hasSize(1);
         assertThat(savedOrder.getTrackingEvents().get(0).getStatus()).isEqualTo("Pending");
         assertThat(savedOrder.getTrackingEvents().get(0).getDescription())
                 .isEqualTo("Your order has been received and is waiting for florist confirmation.");
+    }
+
+    @Test
+    void createOrderRejectsPastDeliveryDateBeforeSaving() {
+        User buyer = User.builder().id(2L).name("Mikaela Santos").role("ROLE_BUYER").build();
+        Product product = Product.builder()
+                .id(7L)
+                .name("Aurora Hydrangea")
+                .price(new BigDecimal("1500.00"))
+                .floristId(9L)
+                .floristName("Karl's Studio")
+                .build();
+        CartItem cartItem = CartItem.builder()
+                .id(12L)
+                .user(buyer)
+                .product(product)
+                .quantity(1)
+                .build();
+        CreateOrderRequest request = CreateOrderRequest.builder()
+                .recipientName("Lara Santos")
+                .recipientAddress("Cebu Business Park")
+                .deliveryDate(LocalDate.now().minusDays(1))
+                .timeSlot("AM")
+                .paymentMethod("GCASH")
+                .build();
+
+        Mockito.when(cartItemRepository.findByUserOrderByIdAsc(buyer)).thenReturn(List.of(cartItem));
+        Mockito.doThrow(new IllegalArgumentException("Delivery date cannot be in the past"))
+                .when(deliverySlotAvailabilityService)
+                .validateOrderSlot(buyer, 9L, request.getDeliveryDate(), "AM");
+
+        assertThatThrownBy(() -> orderService.createOrder(buyer, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Delivery date cannot be in the past");
+        Mockito.verify(orderRepository, Mockito.never()).save(Mockito.any(Order.class));
+    }
+
+    @Test
+    void createOrderRejectsFullCapacityFloristDateBeforeSaving() {
+        User buyer = User.builder().id(2L).name("Mikaela Santos").role("ROLE_BUYER").build();
+        Product product = Product.builder()
+                .id(7L)
+                .name("Aurora Hydrangea")
+                .price(new BigDecimal("1500.00"))
+                .floristId(9L)
+                .floristName("Karl's Studio")
+                .build();
+        CartItem cartItem = CartItem.builder()
+                .id(12L)
+                .user(buyer)
+                .product(product)
+                .quantity(1)
+                .build();
+        CreateOrderRequest request = CreateOrderRequest.builder()
+                .recipientName("Lara Santos")
+                .recipientAddress("Cebu Business Park")
+                .deliveryDate(LocalDate.now().plusDays(1))
+                .timeSlot("PM")
+                .paymentMethod("GCASH")
+                .build();
+
+        Mockito.when(cartItemRepository.findByUserOrderByIdAsc(buyer)).thenReturn(List.of(cartItem));
+        Mockito.doThrow(new IllegalArgumentException("This florist is fully booked for this date. Please choose another date."))
+                .when(deliverySlotAvailabilityService)
+                .validateOrderSlot(buyer, 9L, request.getDeliveryDate(), "PM");
+
+        assertThatThrownBy(() -> orderService.createOrder(buyer, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("This florist is fully booked for this date. Please choose another date.");
+        Mockito.verify(orderRepository, Mockito.never()).save(Mockito.any(Order.class));
     }
 
     @Test

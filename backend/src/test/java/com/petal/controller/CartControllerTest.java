@@ -59,6 +59,7 @@ class CartControllerTest {
                 .items(List.of(CartItemResponse.builder()
                         .id(10L)
                         .productId(7L)
+                        .floristId(9L)
                         .productName("Kanso Vase")
                         .productImageUrl("/images/product_ceramic_vase_1771726567287.png")
                         .floristName("Ceramics by Jo")
@@ -75,6 +76,7 @@ class CartControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success", is(true)))
                 .andExpect(jsonPath("$.data.items", hasSize(1)))
+                .andExpect(jsonPath("$.data.items[0].floristId", is(9)))
                 .andExpect(jsonPath("$.data.items[0].productName", is("Kanso Vase")))
                 .andExpect(jsonPath("$.data.subtotal", is(110.00)));
     }

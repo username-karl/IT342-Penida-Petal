@@ -42,6 +42,7 @@ public class OrderService {
     private final OrderRepository orderRepository;
     private final FloristService floristService;
     private final OrderImageStorageService orderImageStorageService;
+    private final DeliverySlotAvailabilityService deliverySlotAvailabilityService;
     private static final Set<String> SELLER_STATUSES = Set.of(
             "PENDING",
             "ACCEPTED",
@@ -68,6 +69,12 @@ public class OrderService {
         if (cartItems.isEmpty()) {
             throw new IllegalArgumentException("Cart is empty");
         }
+        Long floristId = resolveSingleFloristId(cartItems);
+        deliverySlotAvailabilityService.validateOrderSlot(
+                user,
+                floristId,
+                request.getDeliveryDate(),
+                request.getTimeSlot());
 
         BigDecimal totalAmount = cartItems.stream()
                 .map(item -> item.getProduct().getPrice().multiply(BigDecimal.valueOf(item.getQuantity())))
@@ -370,6 +377,16 @@ public class OrderService {
     private boolean hasSellerItems(Order order, Long floristId) {
         return order.getItems().stream()
                 .anyMatch(item -> floristId.equals(item.getProduct().getFloristId()));
+    }
+
+    private Long resolveSingleFloristId(List<CartItem> cartItems) {
+        Long floristId = cartItems.get(0).getProduct().getFloristId();
+        boolean hasOtherFlorists = cartItems.stream()
+                .anyMatch(item -> !floristId.equals(item.getProduct().getFloristId()));
+        if (hasOtherFlorists) {
+            throw new IllegalArgumentException("Checkout supports one florist per order");
+        }
+        return floristId;
     }
 
     private void validatePhotoFile(MultipartFile file) {
