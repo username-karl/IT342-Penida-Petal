@@ -49,7 +49,7 @@ class OrderServiceTest {
     private FloristService floristService;
 
     @Mock
-    private OrderImageStorageService orderImageStorageService;
+    private StorageService storageService;
 
     @Mock
     private DeliverySlotAvailabilityService deliverySlotAvailabilityService;
@@ -234,6 +234,25 @@ class OrderServiceTest {
         assertThat(response.getItems()).hasSize(2);
         assertThat(response.getShipping().getCourierName()).isEqualTo("Petal Cebu Rider");
         assertThat(response.getShipping().getEvents()).hasSize(1);
+    }
+
+    @Test
+    void getBuyerOrderResolvesPrivateSupabaseProofAfterOwnershipCheck() {
+        User buyer = User.builder().id(2L).name("Mikaela Santos").role("ROLE_BUYER").build();
+        Order order = orderWithItems(buyer, "DELIVERED");
+        order.setProofImageUrl("supabase://order-photos/proof-private.jpg");
+
+        Mockito.when(orderRepository.findByIdAndUser(25L, buyer))
+                .thenReturn(Optional.of(order));
+        Mockito.when(storageService.resolveUrl("supabase://order-photos/proof-private.jpg"))
+                .thenReturn("https://project-ref.supabase.co/storage/v1/object/sign/order-photos/proof-private.jpg?token=signed");
+
+        BuyerOrderResponse response = orderService.getBuyerOrder(buyer, 25L);
+
+        assertThat(response.getProofImageUrl())
+                .isEqualTo("https://project-ref.supabase.co/storage/v1/object/sign/order-photos/proof-private.jpg?token=signed");
+        assertThat(response.getShipping().getProofImageUrl())
+                .isEqualTo("https://project-ref.supabase.co/storage/v1/object/sign/order-photos/proof-private.jpg?token=signed");
     }
 
     @Test
@@ -561,7 +580,7 @@ class OrderServiceTest {
 
         Mockito.when(floristService.getOrCreateForUser(seller)).thenReturn(florist);
         Mockito.when(orderRepository.findById(25L)).thenReturn(Optional.of(order));
-        Mockito.when(orderImageStorageService.store(file, "fulfillment")).thenReturn("/uploads/order-photos/bouquet.jpg");
+        Mockito.when(storageService.storeOrderPhoto(file, "fulfillment")).thenReturn("/uploads/order-photos/bouquet.jpg");
         Mockito.when(orderRepository.save(order)).thenReturn(order);
 
         SellerOrderResponse response = orderService.uploadFulfillmentPhoto(seller, 25L, file);
@@ -580,7 +599,7 @@ class OrderServiceTest {
 
         Mockito.when(floristService.getOrCreateForUser(seller)).thenReturn(florist);
         Mockito.when(orderRepository.findById(25L)).thenReturn(Optional.of(order));
-        Mockito.when(orderImageStorageService.store(file, "proof")).thenReturn("/uploads/order-photos/proof.png");
+        Mockito.when(storageService.storeOrderPhoto(file, "proof")).thenReturn("/uploads/order-photos/proof.png");
         Mockito.when(orderRepository.save(order)).thenReturn(order);
 
         SellerOrderResponse response = orderService.uploadProofPhoto(seller, 25L, file);
@@ -599,7 +618,7 @@ class OrderServiceTest {
 
         Mockito.when(floristService.getOrCreateForUser(seller)).thenReturn(florist);
         Mockito.when(orderRepository.findById(25L)).thenReturn(Optional.of(order));
-        Mockito.when(orderImageStorageService.store(file, "proof")).thenReturn("/uploads/order-photos/proof.webp");
+        Mockito.when(storageService.storeOrderPhoto(file, "proof")).thenReturn("/uploads/order-photos/proof.webp");
         Mockito.when(orderRepository.save(order)).thenReturn(order);
 
         SellerOrderResponse response = orderService.uploadProofPhoto(seller, 25L, file);

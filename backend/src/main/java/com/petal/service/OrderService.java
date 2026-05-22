@@ -42,7 +42,7 @@ public class OrderService {
     private final CartItemRepository cartItemRepository;
     private final OrderRepository orderRepository;
     private final FloristService floristService;
-    private final OrderImageStorageService orderImageStorageService;
+    private final StorageService storageService;
     private final DeliverySlotAvailabilityService deliverySlotAvailabilityService;
     private static final Set<String> SELLER_STATUSES = Set.of(
             "PENDING",
@@ -231,7 +231,7 @@ public class OrderService {
         if (!FULFILLMENT_PHOTO_STATUSES.contains(status)) {
             throw new IllegalArgumentException("Fulfillment photo is allowed once the order is being arranged");
         }
-        String imageUrl = orderImageStorageService.store(file, "fulfillment");
+        String imageUrl = storageService.storeOrderPhoto(file, "fulfillment");
         order.setFulfillmentImageUrl(imageUrl);
         Order savedOrder = orderRepository.save(order);
         return toSellerOrderResponse(savedOrder, florist.getId());
@@ -246,7 +246,7 @@ public class OrderService {
         if (!"DELIVERED".equals(status)) {
             throw new IllegalArgumentException("Proof of delivery photo is allowed after the order is delivered");
         }
-        String imageUrl = orderImageStorageService.store(file, "proof");
+        String imageUrl = storageService.storeOrderPhoto(file, "proof");
         order.setProofImageUrl(imageUrl);
         Order savedOrder = orderRepository.save(order);
         return toSellerOrderResponse(savedOrder, florist.getId());
@@ -279,8 +279,8 @@ public class OrderService {
                         .map(item -> item.getProductName() + " x" + item.getQuantity())
                         .reduce((first, second) -> first + ", " + second)
                         .orElse("No seller items"))
-                .fulfillmentImageUrl(order.getFulfillmentImageUrl())
-                .proofImageUrl(order.getProofImageUrl())
+                .fulfillmentImageUrl(resolveImageUrl(order.getFulfillmentImageUrl()))
+                .proofImageUrl(resolveImageUrl(order.getProofImageUrl()))
                 .shipping(toShippingInfoResponse(order))
                 .items(items)
                 .build();
@@ -307,8 +307,8 @@ public class OrderService {
                         .map(item -> item.getProductName() + " x" + item.getQuantity())
                         .reduce((first, second) -> first + ", " + second)
                         .orElse("No items"))
-                .fulfillmentImageUrl(order.getFulfillmentImageUrl())
-                .proofImageUrl(order.getProofImageUrl())
+                .fulfillmentImageUrl(resolveImageUrl(order.getFulfillmentImageUrl()))
+                .proofImageUrl(resolveImageUrl(order.getProofImageUrl()))
                 .shipping(toShippingInfoResponse(order))
                 .items(items)
                 .build();
@@ -352,8 +352,8 @@ public class OrderService {
                         ? order.getDeliveryDate()
                         : order.getEstimatedDeliveryDate())
                 .latestStatus(latestStatus)
-                .fulfillmentImageUrl(order.getFulfillmentImageUrl())
-                .proofImageUrl(order.getProofImageUrl())
+                .fulfillmentImageUrl(resolveImageUrl(order.getFulfillmentImageUrl()))
+                .proofImageUrl(resolveImageUrl(order.getProofImageUrl()))
                 .events(events)
                 .build();
     }
@@ -409,6 +409,14 @@ public class OrderService {
         if (file.getSize() > MAX_PHOTO_BYTES) {
             throw new IllegalArgumentException("Photo must be 5MB or smaller");
         }
+    }
+
+    private String resolveImageUrl(String storedPath) {
+        if (storedPath == null || !storedPath.startsWith("supabase://")) {
+            return storedPath;
+        }
+        String resolvedUrl = storageService.resolveUrl(storedPath);
+        return resolvedUrl == null ? storedPath : resolvedUrl;
     }
 
     private Florist requireUploadFlorist(User seller) {

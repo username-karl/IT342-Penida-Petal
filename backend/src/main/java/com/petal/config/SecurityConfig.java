@@ -35,7 +35,7 @@ public class SecurityConfig {
                                 response.sendError(HttpStatus.FORBIDDEN.value(), "Access denied")))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/**").permitAll()
-                        .requestMatchers("/uploads/**").permitAll()
+                        .requestMatchers("/uploads/florist-logos/**").permitAll()
                         .requestMatchers("/api/florists/profile/**").hasRole("FLORIST")
                         .requestMatchers("/api/seller/**").hasRole("FLORIST")
                         .requestMatchers(HttpMethod.GET, "/api/orders/florist").hasRole("FLORIST")

@@ -27,7 +27,7 @@ class FloristServiceTest {
 
     @Test
     void floristCanUploadOwnLogo() {
-        OrderImageStorageService storageService = new OrderImageStorageService(uploadDir.toString());
+        LocalStorageService storageService = new LocalStorageService(uploadDir.toString());
         FloristService floristService = new FloristService(floristRepository, storageService);
         User seller = seller();
         Florist florist = Florist.builder()
@@ -50,7 +50,7 @@ class FloristServiceTest {
 
     @Test
     void buyerCannotUploadLogo() {
-        FloristService floristService = new FloristService(floristRepository, new OrderImageStorageService(uploadDir.toString()));
+        FloristService floristService = new FloristService(floristRepository, new LocalStorageService(uploadDir.toString()));
         User buyer = User.builder().id(2L).name("Buyer").role("ROLE_BUYER").build();
 
         assertThatThrownBy(() -> floristService.uploadProfileImage(buyer, imageFile("logo.jpg", "image/jpeg")))
@@ -60,7 +60,7 @@ class FloristServiceTest {
 
     @Test
     void invalidLogoTypeIsRejected() {
-        FloristService floristService = new FloristService(floristRepository, new OrderImageStorageService(uploadDir.toString()));
+        FloristService floristService = new FloristService(floristRepository, new LocalStorageService(uploadDir.toString()));
         User seller = seller();
         Florist florist = Florist.builder().id(9L).user(seller).storeName("Karl's Studio").build();
 
@@ -73,7 +73,7 @@ class FloristServiceTest {
 
     @Test
     void emptyLogoFileIsRejected() {
-        FloristService floristService = new FloristService(floristRepository, new OrderImageStorageService(uploadDir.toString()));
+        FloristService floristService = new FloristService(floristRepository, new LocalStorageService(uploadDir.toString()));
         User seller = seller();
         Florist florist = Florist.builder().id(9L).user(seller).storeName("Karl's Studio").build();
 

@@ -21,7 +21,7 @@ public class FloristService {
     private static final int DEFAULT_PREP_LEAD_TIME_HOURS = 24;
 
     private final FloristRepository floristRepository;
-    private final OrderImageStorageService orderImageStorageService;
+    private final StorageService storageService;
 
     public Florist createDefaultProfile(User user) {
         requireFloristUser(user);
@@ -90,7 +90,7 @@ public class FloristService {
 
     public FloristResponse uploadProfileImage(User user, MultipartFile file) {
         Florist florist = getOrCreateForUser(user);
-        String logoUrl = orderImageStorageService.storeFloristLogo(file);
+        String logoUrl = storageService.storeFloristLogo(file);
         florist.setLogoUrl(logoUrl);
         return toResponse(floristRepository.save(florist));
     }
