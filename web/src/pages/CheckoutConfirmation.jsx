@@ -6,6 +6,13 @@ const formatPeso = (value) => `₱${Number(value || 0).toLocaleString('en-PH', {
     maximumFractionDigits: 2,
 })}`;
 
+const paymentLabels = {
+    COD: 'Cash on Delivery',
+    GCASH: 'GCash',
+    MAYA: 'Maya',
+    CARD: 'Card',
+};
+
 export default function CheckoutConfirmation() {
     const location = useLocation();
     const order = location.state?.order;
@@ -24,7 +31,7 @@ export default function CheckoutConfirmation() {
                     Your gift is pending.
                 </h1>
                 <p className="text-stone-600 leading-relaxed mb-8">
-                    The florist can now review and prepare this order. This build uses mock payment, so no real charge was made.
+                    The florist can now review and prepare this order. Your selected payment method is saved with the order.
                 </p>
                 {order && (
                     <div className="border border-stone-100 bg-[#FDFCF8] p-5 text-left text-sm space-y-3 mb-8">
@@ -39,6 +46,10 @@ export default function CheckoutConfirmation() {
                         <div className="flex justify-between">
                             <span className="text-stone-500">Delivery</span>
                             <span className="font-medium">{order.deliveryDate} / {order.timeSlot}</span>
+                        </div>
+                        <div className="flex justify-between">
+                            <span className="text-stone-500">Payment</span>
+                            <span className="font-medium">{paymentLabels[order.paymentMethod] || order.paymentMethod}</span>
                         </div>
                         <div className="flex justify-between">
                             <span className="text-stone-500">Total</span>

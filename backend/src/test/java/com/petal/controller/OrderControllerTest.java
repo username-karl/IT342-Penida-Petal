@@ -1,8 +1,12 @@
 package com.petal.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.petal.dto.BuyerOrderResponse;
 import com.petal.dto.CreateOrderRequest;
 import com.petal.dto.OrderResponse;
+import com.petal.dto.SellerOrderResponse;
+import com.petal.dto.ShippingInfoResponse;
+import com.petal.dto.TrackingEventResponse;
 import com.petal.entity.User;
 import com.petal.repository.UserRepository;
 import com.petal.security.JwtUtil;
@@ -14,16 +18,24 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 
+import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -56,6 +68,7 @@ class OrderControllerTest {
                 .cardMessage("Happy birthday!")
                 .deliveryDate(LocalDate.now().plusDays(1))
                 .timeSlot("AM")
+                .paymentMethod("GCASH")
                 .build();
 
         Mockito.when(orderService.createOrder(eq(user), eq(request))).thenReturn(OrderResponse.builder()
@@ -63,6 +76,7 @@ class OrderControllerTest {
                 .status("PENDING")
                 .deliveryDate(request.getDeliveryDate())
                 .timeSlot("AM")
+                .paymentMethod("GCASH")
                 .totalAmount(new BigDecimal("98.00"))
                 .message("Order placed successfully.")
                 .build());
@@ -75,7 +89,124 @@ class OrderControllerTest {
                 .andExpect(jsonPath("$.success", is(true)))
                 .andExpect(jsonPath("$.data.status", is("PENDING")))
                 .andExpect(jsonPath("$.data.timeSlot", is("AM")))
+                .andExpect(jsonPath("$.data.paymentMethod", is("GCASH")))
                 .andExpect(jsonPath("$.data.message", is("Order placed successfully.")));
+    }
+
+    @Test
+    void getOrdersReturnsCurrentBuyerOrderHistory() throws Exception {
+        User user = authenticatedUser();
+
+        Mockito.when(orderService.getBuyerOrders(user)).thenReturn(List.of(
+                BuyerOrderResponse.builder()
+                        .id(25L)
+                        .orderNumber("PET-0025")
+                        .status("PREPARING")
+                        .deliveryDate(LocalDate.of(2026, 5, 18))
+                        .timeSlot("AM")
+                        .paymentMethod("GCASH")
+                        .totalAmount(new BigDecimal("2468.00"))
+                        .itemSummary("Aurora Hydrangea x2")
+                        .build()));
+
+        mockMvc.perform(get("/api/orders")
+                        .principal(SecurityContextHolder.getContext().getAuthentication()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.data", hasSize(1)))
+                .andExpect(jsonPath("$.data[0].orderNumber", is("PET-0025")))
+                .andExpect(jsonPath("$.data[0].status", is("PREPARING")))
+                .andExpect(jsonPath("$.data[0].paymentMethod", is("GCASH")))
+                .andExpect(jsonPath("$.data[0].itemSummary", is("Aurora Hydrangea x2")));
+    }
+
+    @Test
+    void getOrderReturnsCurrentBuyerOrderDetail() throws Exception {
+        User user = authenticatedUser();
+
+        Mockito.when(orderService.getBuyerOrder(user, 25L)).thenReturn(
+                BuyerOrderResponse.builder()
+                        .id(25L)
+                        .orderNumber("PET-0025")
+                        .status("READY_FOR_PICKUP")
+                        .deliveryDate(LocalDate.of(2026, 5, 18))
+                        .timeSlot("PM")
+                        .paymentMethod("MAYA")
+                        .totalAmount(new BigDecimal("2468.00"))
+                        .recipientName("Maria Santos")
+                        .recipientAddress("Cebu Business Park")
+                        .fulfillmentImageUrl("/uploads/order-photos/prep.jpg")
+                        .proofImageUrl("/uploads/order-photos/proof.jpg")
+                        .shipping(ShippingInfoResponse.builder()
+                                .courierName("Petal Cebu Rider")
+                                .trackingNumber("PETAL-TRACK-25")
+                                .estimatedDeliveryDate(LocalDate.of(2026, 5, 19))
+                                .latestStatus("Out for delivery")
+                                .events(List.of(TrackingEventResponse.builder()
+                                        .id(9L)
+                                        .status("Out for delivery")
+                                        .description("Your bouquet is on the way to the recipient.")
+                                        .timestamp(LocalDateTime.of(2026, 5, 19, 12, 10))
+                                        .build()))
+                                .build())
+                        .itemSummary("Aurora Hydrangea x2")
+                        .build());
+
+        mockMvc.perform(get("/api/orders/25")
+                        .principal(SecurityContextHolder.getContext().getAuthentication()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.data.orderNumber", is("PET-0025")))
+                .andExpect(jsonPath("$.data.status", is("READY_FOR_PICKUP")))
+                .andExpect(jsonPath("$.data.paymentMethod", is("MAYA")))
+                .andExpect(jsonPath("$.data.recipientAddress", is("Cebu Business Park")))
+                .andExpect(jsonPath("$.data.fulfillmentImageUrl", is("/uploads/order-photos/prep.jpg")))
+                .andExpect(jsonPath("$.data.proofImageUrl", is("/uploads/order-photos/proof.jpg")))
+                .andExpect(jsonPath("$.data.shipping.courierName", is("Petal Cebu Rider")))
+                .andExpect(jsonPath("$.data.shipping.trackingNumber", is("PETAL-TRACK-25")))
+                .andExpect(jsonPath("$.data.shipping.events[0].status", is("Out for delivery")));
+    }
+
+    @Test
+    void uploadFulfillmentPhotoUsesMultipartFileField() throws Exception {
+        User florist = authenticatedFlorist();
+        MockMultipartFile file = new MockMultipartFile("file", "bouquet.jpg", "image/jpeg", "image-bytes".getBytes());
+
+        Mockito.when(orderService.uploadFulfillmentPhoto(eq(florist), eq(25L), any())).thenReturn(
+                SellerOrderResponse.builder()
+                        .id(25L)
+                        .fulfillmentImageUrl("/uploads/order-photos/bouquet.jpg")
+                        .build());
+
+        mockMvc.perform(multipart("/api/orders/25/fulfillment-photo")
+                        .file(file)
+                        .principal(SecurityContextHolder.getContext().getAuthentication()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.fulfillmentImageUrl", is("/uploads/order-photos/bouquet.jpg")));
+    }
+
+    @Test
+    void uploadProofPhotoRejectsMissingFile() throws Exception {
+        authenticatedFlorist();
+
+        mockMvc.perform(multipart("/api/orders/25/proof")
+                        .principal(SecurityContextHolder.getContext().getAuthentication()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message", is("Photo file is required")));
+    }
+
+    @Test
+    void uploadPhotoReturnsForbiddenWhenServiceRejectsUser() throws Exception {
+        User buyer = authenticatedUser();
+        MockMultipartFile file = new MockMultipartFile("file", "bouquet.jpg", "image/jpeg", "image-bytes".getBytes());
+        Mockito.when(orderService.uploadFulfillmentPhoto(eq(buyer), eq(25L), any()))
+                .thenThrow(new ResponseStatusException(HttpStatus.FORBIDDEN, "Florist access is required"));
+
+        mockMvc.perform(multipart("/api/orders/25/fulfillment-photo")
+                        .file(file)
+                        .principal(SecurityContextHolder.getContext().getAuthentication()))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message", is("Florist access is required")));
     }
 
     private User authenticatedUser() {
@@ -84,6 +215,18 @@ class OrderControllerTest {
                 .name("Karl")
                 .email("karl@example.com")
                 .role("ROLE_BUYER")
+                .build();
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(user, null, List.of()));
+        return user;
+    }
+
+    private User authenticatedFlorist() {
+        User user = User.builder()
+                .id(4L)
+                .name("Karl")
+                .email("karl@petal.test")
+                .role("ROLE_FLORIST")
                 .build();
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken(user, null, List.of()));

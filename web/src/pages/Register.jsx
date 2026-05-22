@@ -24,7 +24,7 @@ export default function Register() {
         try {
             await register(formData.name, formData.email, formData.password, formData.role);
             await login(formData.email, formData.password);
-            navigate('/dashboard');
+            navigate(formData.role === 'artisan' ? '/seller-onboarding' : '/dashboard');
         } catch (err) {
             setError(err.response?.data?.message || err.message || 'Failed to register');
         } finally {

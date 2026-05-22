@@ -5,6 +5,7 @@ import com.petal.dto.CartResponse;
 import com.petal.entity.CartItem;
 import com.petal.entity.Product;
 import com.petal.entity.User;
+import com.petal.exception.ForbiddenException;
 import com.petal.repository.CartItemRepository;
 import com.petal.repository.ProductRepository;
 import lombok.RequiredArgsConstructor;
@@ -22,6 +23,7 @@ public class CartService {
     private final ProductRepository productRepository;
 
     public CartResponse getCart(User user) {
+        requireBuyer(user);
         List<CartItemResponse> items = cartItemRepository.findByUserOrderByIdAsc(user).stream()
                 .map(this::toResponse)
                 .toList();
@@ -37,6 +39,7 @@ public class CartService {
 
     @Transactional
     public CartItemResponse addItem(User user, Long productId, int quantity) {
+        requireBuyer(user);
         Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new IllegalArgumentException("Product not found"));
 
@@ -60,17 +63,25 @@ public class CartService {
 
     @Transactional
     public CartItemResponse updateItem(User user, Long itemId, int quantity) {
+        requireBuyer(user);
         CartItem cartItem = cartItemRepository.findByIdAndUser(itemId, user)
-                .orElseThrow(() -> new IllegalArgumentException("Cart item not found"));
+                .orElseThrow(() -> new ForbiddenException("Cart item not found"));
         cartItem.setQuantity(quantity);
         return toResponse(cartItemRepository.save(cartItem));
     }
 
     @Transactional
     public void removeItem(User user, Long itemId) {
+        requireBuyer(user);
         CartItem cartItem = cartItemRepository.findByIdAndUser(itemId, user)
-                .orElseThrow(() -> new IllegalArgumentException("Cart item not found"));
+                .orElseThrow(() -> new ForbiddenException("Cart item not found"));
         cartItemRepository.delete(cartItem);
+    }
+
+    private void requireBuyer(User user) {
+        if (user == null || !"ROLE_BUYER".equals(user.getRole())) {
+            throw new ForbiddenException("Buyer access is required");
+        }
     }
 
     private CartItemResponse toResponse(CartItem cartItem) {
@@ -81,6 +92,7 @@ public class CartService {
         return CartItemResponse.builder()
                 .id(cartItem.getId())
                 .productId(product.getId())
+                .floristId(product.getFloristId())
                 .productName(product.getName())
                 .productImageUrl(product.getImageUrl())
                 .floristName(product.getFloristName())

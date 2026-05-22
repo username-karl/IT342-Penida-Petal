@@ -17,6 +17,7 @@ public class OrderResponse {
     private String status;
     private LocalDate deliveryDate;
     private String timeSlot;
+    private String paymentMethod;
     private BigDecimal totalAmount;
     private String message;
 }

@@ -1,0 +1,32 @@
+package com.petal.dto;
+
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.List;
+
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class BuyerOrderResponse {
+    private Long id;
+    private String orderNumber;
+    private String recipientName;
+    private String recipientAddress;
+    private String cardMessage;
+    private LocalDate deliveryDate;
+    private String timeSlot;
+    private String paymentMethod;
+    private String status;
+    private BigDecimal totalAmount;
+    private String itemSummary;
+    private String fulfillmentImageUrl;
+    private String proofImageUrl;
+    private ShippingInfoResponse shipping;
+    private List<BuyerOrderItemResponse> items;
+}

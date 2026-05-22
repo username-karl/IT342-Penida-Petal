@@ -1,7 +1,18 @@
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
-export default function ProtectedRoute({ children }) {
+function normalizeRole(role) {
+    if (!role) return '';
+    return role.replace(/^ROLE_/, '').toLowerCase();
+}
+
+function fallbackPath(userRole, allowedRoles) {
+    if (!allowedRoles?.length) return '/dashboard';
+    if (userRole === 'florist') return '/seller-centre';
+    return '/dashboard';
+}
+
+export default function ProtectedRoute({ children, roles = [] }) {
     const { user, loading } = useAuth();
 
     if (loading) {
@@ -19,6 +30,13 @@ export default function ProtectedRoute({ children }) {
 
     if (!user) {
         return <Navigate to="/login" replace />;
+    }
+
+    const normalizedRole = normalizeRole(user.role);
+    const allowedRoles = roles.map(normalizeRole);
+
+    if (allowedRoles.length > 0 && !allowedRoles.includes(normalizedRole)) {
+        return <Navigate to={fallbackPath(normalizedRole, allowedRoles)} replace />;
     }
 
     return children;

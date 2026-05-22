@@ -1,12 +1,15 @@
-import React from 'react';
-import { Plus } from 'lucide-react';
+import React, { useState } from 'react';
+import { Plus, Store } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { mediaUrl } from '../services/api';
 
 export default function ProductCard({ product }) {
+    const [logoBroken, setLogoBroken] = useState(false);
     const image = product.image || product.imageUrl;
     const artisan = product.artisan || product.floristName;
     const subtitle = product.subtitle || product.description;
     const price = typeof product.price === 'number' ? `$${product.price.toFixed(2)}` : product.price;
+    const logo = !logoBroken ? mediaUrl(product.floristLogoUrl) : '';
 
     return (
         <Link to={`/products/${product.id}`} className="group block" aria-label={`View ${product.name}`}>
@@ -28,8 +31,17 @@ export default function ProductCard({ product }) {
                 )}
             </div>
             <div className="flex justify-between items-start">
-                <div>
-                    <p className="text-[10px] uppercase tracking-wider text-stone-400 mb-1">{artisan}</p>
+                <div className="min-w-0 pr-3">
+                    <div className="mb-2 flex items-center gap-2">
+                        <span className="h-7 w-7 shrink-0 overflow-hidden rounded-full border border-stone-200 bg-stone-100 flex items-center justify-center">
+                            {logo ? (
+                                <img src={logo} alt="" onError={() => setLogoBroken(true)} className="h-full w-full object-cover" />
+                            ) : (
+                                <Store size={13} strokeWidth={1.5} className="text-stone-500" />
+                            )}
+                        </span>
+                        <p className="truncate text-[10px] uppercase tracking-wider text-stone-400">{artisan}</p>
+                    </div>
                     <h3 className="text-lg font-serif font-medium text-stone-900 leading-none mb-1 group-hover:underline decoration-stone-300 underline-offset-4">
                         {product.name}
                     </h3>

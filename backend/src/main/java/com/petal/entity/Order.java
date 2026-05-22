@@ -37,7 +37,7 @@ public class Order {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    @Column(nullable = false)
+    @Column(nullable = false, columnDefinition = "varchar(255) default 'COD'")
     private String recipientName;
 
     @Column(nullable = false, length = 1000)
@@ -54,7 +54,25 @@ public class Order {
 
     @Column(nullable = false)
     @Builder.Default
+    private String paymentMethod = "COD";
+
+    @Column(nullable = false)
+    @Builder.Default
     private String status = "PENDING";
+
+    private String courierName;
+
+    private String trackingNumber;
+
+    private LocalDate estimatedDeliveryDate;
+
+    private String latestShippingStatus;
+
+    @Column(name = "fulfillment_image_url")
+    private String fulfillmentImageUrl;
+
+    @Column(name = "proof_image_url")
+    private String proofImageUrl;
 
     @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal totalAmount;
@@ -62,4 +80,8 @@ public class Order {
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     private List<OrderItem> items = new ArrayList<>();
+
+    @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
+    private List<TrackingEvent> trackingEvents = new ArrayList<>();
 }

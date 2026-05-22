@@ -22,5 +22,6 @@ public class ProductResponse {
     private Long floristId;
     private String floristName;
     private String floristLogoUrl;
+    private String floristBio;
     private boolean inStock;
 }

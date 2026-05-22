@@ -4,12 +4,7 @@ import { authAPI } from '../services/api';
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-    const [user, setUser] = useState({
-        name: "Developer",
-        email: "dev@petal.com",
-        role: "admin",
-        id: 1
-    });
+    const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -19,6 +14,7 @@ export function AuthProvider({ children }) {
     const checkAuth = async () => {
         const token = localStorage.getItem('petal_token');
         if (!token) {
+            setUser(null);
             setLoading(false);
             return;
         }
@@ -29,6 +25,7 @@ export function AuthProvider({ children }) {
         } catch (error) {
             localStorage.removeItem('petal_token');
             localStorage.removeItem('petal_user');
+            setUser(null);
         } finally {
             setLoading(false);
         }

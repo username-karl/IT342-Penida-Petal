@@ -14,6 +14,7 @@ import java.math.BigDecimal;
 public class CartItemResponse {
     private Long id;
     private Long productId;
+    private Long floristId;
     private String productName;
     private String productImageUrl;
     private String floristName;

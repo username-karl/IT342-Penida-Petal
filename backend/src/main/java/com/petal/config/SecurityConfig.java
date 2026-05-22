@@ -4,6 +4,8 @@ import com.petal.security.JwtFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -26,9 +28,28 @@ public class SecurityConfig {
         http
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .exceptionHandling(exceptions -> exceptions
+                        .authenticationEntryPoint((request, response, authException) ->
+                                response.sendError(HttpStatus.UNAUTHORIZED.value(), "Authentication required"))
+                        .accessDeniedHandler((request, response, accessDeniedException) ->
+                                response.sendError(HttpStatus.FORBIDDEN.value(), "Access denied")))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/**").permitAll()
-                        .requestMatchers("/api/products/**").permitAll()
+                        .requestMatchers("/uploads/**").permitAll()
+                        .requestMatchers("/api/florists/profile/**").hasRole("FLORIST")
+                        .requestMatchers("/api/seller/**").hasRole("FLORIST")
+                        .requestMatchers(HttpMethod.GET, "/api/orders/florist").hasRole("FLORIST")
+                        .requestMatchers(HttpMethod.PATCH, "/api/orders/*/status").hasRole("FLORIST")
+                        .requestMatchers(HttpMethod.POST, "/api/orders/*/fulfillment-photo").hasRole("FLORIST")
+                        .requestMatchers(HttpMethod.POST, "/api/orders/*/proof").hasRole("FLORIST")
+                        .requestMatchers("/api/cart/**").hasRole("BUYER")
+                        .requestMatchers("/api/addresses/**").hasRole("BUYER")
+                        .requestMatchers("/api/users/addresses/**").hasRole("BUYER")
+                        .requestMatchers("/api/users/dates/**").hasRole("BUYER")
+                        .requestMatchers(HttpMethod.GET, "/api/slots/availability").hasRole("BUYER")
+                        .requestMatchers(HttpMethod.GET, "/api/orders/**").hasRole("BUYER")
+                        .requestMatchers(HttpMethod.POST, "/api/orders").hasRole("BUYER")
+                        .requestMatchers(HttpMethod.GET, "/api/products/**").permitAll()
                         .anyRequest().authenticated())
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
 

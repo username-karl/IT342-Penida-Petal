@@ -31,4 +31,7 @@ public class CreateOrderRequest {
 
     @NotBlank(message = "Time slot is required")
     private String timeSlot;
+
+    @NotBlank(message = "Payment method is required")
+    private String paymentMethod;
 }

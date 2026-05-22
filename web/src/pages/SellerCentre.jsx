@@ -1,423 +1,940 @@
-import { useState } from 'react';
-import { useAuth } from '../context/AuthContext';
-import { useNavigate, Link, useLocation } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
-    Leaf, LogOut, Package, User, Settings,
-    Flower2, CreditCard, MapPin, Heart, Edit2, Shield, Gift, Plus, Search, ArrowRight, ChevronDown, Store, AlertCircle
+    AlertCircle,
+    ArrowRight,
+    BarChart3,
+    Boxes,
+    CheckCircle2,
+    ChevronDown,
+    ClipboardList,
+    Edit3,
+    Eye,
+    Leaf,
+    LogOut,
+    Package,
+    Plus,
+    Search,
+    Settings,
+    Store,
+    Truck,
+    Upload,
+    Wallet,
+    X,
 } from 'lucide-react';
-import KpiCard from '../components/KpiCard';
+import { useAuth } from '../context/AuthContext';
+import Grainient from '../components/Grainient';
+import { floristAPI, mediaUrl, ordersAPI, productsAPI } from '../services/api';
+
+const moodOptions = ['romance', 'celebration', 'sympathy', 'apology', 'calm', 'gratitude', 'wildflower'];
+
+const blankListing = {
+    name: '',
+    description: '',
+    price: '',
+    moodTags: ['celebration'],
+    imageUrl: '/images/product_aurora_hydrangea_1771726583839.png',
+    floristName: '',
+    floristLogoUrl: '',
+    inStock: true,
+};
+
+const orderRows = [
+    {
+        id: 'PET-24018',
+        buyer: 'Mikaela Santos',
+        product: 'The Aurora',
+        delivery: 'May 18, AM',
+        total: '₱2,940',
+        status: 'To Prepare',
+        tone: 'amber',
+    },
+    {
+        id: 'PET-24019',
+        buyer: 'Dane Villamor',
+        product: 'Kanso Vase',
+        delivery: 'May 18, PM',
+        total: '₱3,300',
+        status: 'Ready for Rider',
+        tone: 'green',
+    },
+    {
+        id: 'PET-24020',
+        buyer: 'Celine Yu',
+        product: 'Winter Wreath',
+        delivery: 'May 19, AM',
+        total: '₱3,900',
+        status: 'New',
+        tone: 'rose',
+    },
+];
+
+const navGroups = [
+    {
+        label: 'Operations',
+        items: [
+            { id: 'overview', label: 'Overview', icon: BarChart3 },
+            { id: 'orders', label: 'Orders', icon: ClipboardList },
+        ],
+    },
+    {
+        label: 'Catalog',
+        items: [
+            { id: 'products', label: 'Products', icon: Boxes },
+            { id: 'newProduct', label: 'Add Product', icon: Plus },
+        ],
+    },
+    {
+        label: 'Studio',
+        items: [
+            { id: 'shopInfo', label: 'Shop Profile', icon: Store },
+            { id: 'settings', label: 'Settings', icon: Settings },
+        ],
+    },
+];
+
+function currency(value) {
+    const number = Number(value || 0);
+    return `₱${number.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function statusClass(status) {
+    if (status === 'COMPLETED' || status === 'DELIVERED' || status === 'READY_FOR_PICKUP') return 'bg-green-50 text-green-800 border-green-200';
+    if (status === 'CANCELLED') return 'bg-stone-100 text-stone-500 border-stone-200';
+    if (status === 'ACCEPTED' || status === 'ARRANGING' || status === 'PREPARING') return 'bg-amber-50 text-amber-800 border-amber-200';
+    if (status === 'OUT_FOR_DELIVERY') return 'bg-stone-900 text-white border-stone-900';
+    return 'bg-rose-50 text-rose-800 border-rose-200';
+}
+
+function statusLabel(status) {
+    const labels = {
+        PENDING: 'New',
+        ACCEPTED: 'Accepted',
+        ARRANGING: 'Arranging',
+        PREPARING: 'Arranging',
+        READY_FOR_PICKUP: 'Ready for Pickup',
+        OUT_FOR_DELIVERY: 'Out for Delivery',
+        DELIVERED: 'Delivered',
+        COMPLETED: 'Completed',
+        CANCELLED: 'Cancelled',
+    };
+    return labels[status] || status;
+}
+
+function paymentLabel(value) {
+    const labels = {
+        COD: 'COD',
+        GCASH: 'GCash',
+        MAYA: 'Maya',
+        CARD: 'Card',
+    };
+    return labels[value] || value;
+}
+
+function nextStatus(status) {
+    if (status === 'PENDING') return 'ACCEPTED';
+    if (status === 'ACCEPTED') return 'ARRANGING';
+    if (status === 'ARRANGING' || status === 'PREPARING') return 'READY_FOR_PICKUP';
+    return null;
+}
+
+function nextStatusLabel(status) {
+    const next = nextStatus(status);
+    if (!next) return '';
+    if (next === 'ACCEPTED') return 'Accept Order';
+    if (next === 'ARRANGING') return 'Mark Arranging';
+    if (next === 'READY_FOR_PICKUP') return 'Mark Ready';
+    return '';
+}
+
+function deliveryLabel(order) {
+    if (!order.deliveryDate) return order.timeSlot || 'No delivery window';
+    const date = new Date(`${order.deliveryDate}T00:00:00`);
+    return `${date.toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })}, ${order.timeSlot}`;
+}
+
+function apiErrorMessage(err, fallback) {
+    const responseMessage = err.response?.data?.message;
+    return responseMessage || err.message || fallback;
+}
 
 export default function SellerCentre() {
     const { user, logout } = useAuth();
     const navigate = useNavigate();
     const location = useLocation();
+    const initialTab = new URLSearchParams(location.search).get('tab') || 'overview';
 
-    // Check query params for initial tab (e.g., ?tab=shopInfo)
-    const searchParams = new URLSearchParams(location.search);
-    const initialTab = searchParams.get('tab') || 'overview';
-
-    // Artisan Shop States
-    const [artisanTab, setArtisanTab] = useState(initialTab);
-    const [orderTab, setOrderTab] = useState('all');
-    const [productTab, setProductTab] = useState('live');
+    const [activeTab, setActiveTab] = useState(initialTab);
+    const [products, setProducts] = useState([]);
+    const [orders, setOrders] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    const [search, setSearch] = useState('');
+    const [formData, setFormData] = useState(blankListing);
+    const [editingProduct, setEditingProduct] = useState(null);
+    const [saving, setSaving] = useState(false);
+    const [notice, setNotice] = useState('');
     const [isEditingShop, setIsEditingShop] = useState(false);
-
-    // Mock Shop Data
-    const [shopBio, setShopBio] = useState("We curate premium, locally-sourced floral arrangements for every occasion. Our focus is on sustainable aesthetics and timeless design.");
     const [shopName, setShopName] = useState(user?.name ? `${user.name}'s Studio` : 'My Floral Studio');
-
-    // Mock Products Data (Reused from previous Profile)
-    const products = [
-        { id: 1, name: "Wild Pampas", subtitle: "Dried Reed Grass", price: "$45", artisan: "Atelier Vert", image: "/images/product_pampas_1771726515735.png", tag: "Bestseller" },
-        { id: 2, name: "Eucalyptus Cinerea", subtitle: "Preserved Foliage", price: "$28", artisan: "Maison Fleuri", image: "/images/product_eucalyptus_1771726530879.png" },
-        { id: 3, name: "Cotton Softness", subtitle: "Natural Cotton Stems", price: "$32", artisan: "Studio Petal", image: "/images/product_cotton_1771726545396.png" },
-        { id: 4, name: "Kanso Vase", subtitle: "Artisan Ceramic", price: "$55", artisan: "Ceramics by Jo", image: "/images/product_ceramic_vase_1771726567287.png" },
-        { id: 5, name: "The Aurora", subtitle: "Hydrangea & Immortelle", price: "$49", artisan: "L'Herbier", image: "/images/product_aurora_hydrangea_1771726583839.png" },
-        { id: 6, name: "Winter Wreath", subtitle: "Pine & Berries", price: "$65", artisan: "Forest & Co.", image: "/images/product_winter_wreath_1771726603408.png", tag: "Unique Piece" },
-    ];
+    const [shopBio, setShopBio] = useState('Locally composed preserved floral pieces for thoughtful Cebu gifting, prepared with careful wrapping and delivery-ready notes.');
+    const [shopCity, setShopCity] = useState('Cebu, Philippines');
+    const [shopLogoUrl, setShopLogoUrl] = useState('');
+    const [shopLogoBroken, setShopLogoBroken] = useState(false);
+    const [logoUploading, setLogoUploading] = useState(false);
+    const [logoError, setLogoError] = useState('');
+    const [dailyCapacity, setDailyCapacity] = useState(12);
+    const [updatingOrderId, setUpdatingOrderId] = useState(null);
 
     const isArtisan = user?.role === 'artisan' || user?.role === 'ARTISAN' || user?.role === 'ROLE_FLORIST';
-    const initials = shopName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+
+    useEffect(() => {
+        if (user && !isArtisan) {
+            navigate('/dashboard');
+        }
+    }, [isArtisan, navigate, user]);
+
+    useEffect(() => {
+        const loadSellerData = async () => {
+            setLoading(true);
+            setError('');
+            try {
+                const [productsResponse, floristResponse, ordersResponse] = await Promise.all([
+                    productsAPI.getSellerProducts(),
+                    floristAPI.getProfile(),
+                    ordersAPI.getSellerOrders(),
+                ]);
+                const florist = floristResponse.data.data;
+                setProducts(productsResponse.data.data || []);
+                setOrders(ordersResponse.data.data || []);
+                setShopName(florist.storeName || (user?.name ? `${user.name}'s Studio` : 'My Floral Studio'));
+                setShopBio(florist.bio || 'Locally composed preserved floral pieces for thoughtful Cebu gifting, prepared with careful wrapping and delivery-ready notes.');
+                setShopCity(florist.city || 'Cebu, Philippines');
+                setShopLogoUrl(florist.logoUrl || '');
+                setShopLogoBroken(false);
+                setDailyCapacity(florist.maxDailyCapacity || 12);
+            } catch (err) {
+                setError(apiErrorMessage(err, 'Unable to load seller data'));
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        if (isArtisan) {
+            loadSellerData();
+        }
+    }, [isArtisan, user?.name]);
+
+    const filteredProducts = useMemo(() => {
+        const normalized = search.trim().toLowerCase();
+        if (!normalized) return products;
+
+        return products.filter((product) =>
+            product.name?.toLowerCase().includes(normalized)
+            || product.description?.toLowerCase().includes(normalized)
+            || product.moodTags?.some((tag) => tag.toLowerCase().includes(normalized))
+        );
+    }, [products, search]);
+
+    const metrics = useMemo(() => {
+        const liveCount = products.filter((product) => product.inStock).length;
+        const soldOutCount = products.length - liveCount;
+        const inventoryValue = products.reduce((sum, product) => sum + Number(product.price || 0), 0);
+        const actionableOrders = orders.filter((order) => !['DELIVERED', 'COMPLETED', 'CANCELLED'].includes(order.status));
+        const today = new Date().toISOString().slice(0, 10);
+        const dueToday = actionableOrders.filter((order) => order.deliveryDate === today).length;
+
+        return [
+            { label: 'Live Listings', value: liveCount, helper: `${soldOutCount} paused or sold out`, icon: Package },
+            { label: 'Orders to Prepare', value: actionableOrders.length, helper: `${dueToday} deliveries due today`, icon: Truck },
+            { label: 'Catalog Value', value: currency(inventoryValue), helper: 'Current listed assortment', icon: Wallet },
+        ];
+    }, [orders, products]);
 
     const handleLogout = () => {
         logout();
         navigate('/login');
     };
 
-    // Protect route: redirect if not an artisan
-    if (user && !isArtisan) {
-        navigate('/dashboard');
-        return null; // Or a loading spinner
-    }
+    const resetForm = () => {
+        setFormData({ ...blankListing, floristName: shopName, floristLogoUrl: shopLogoUrl });
+        setEditingProduct(null);
+    };
+
+    const editProduct = (product) => {
+        setEditingProduct(product);
+        setFormData({
+            name: product.name || '',
+            description: product.description || '',
+            price: product.price || '',
+            moodTags: product.moodTags?.length ? product.moodTags : ['celebration'],
+            imageUrl: product.imageUrl || blankListing.imageUrl,
+            floristName: product.floristName || shopName,
+            floristLogoUrl: product.floristLogoUrl || shopLogoUrl,
+            inStock: product.inStock,
+        });
+        setActiveTab('newProduct');
+    };
+
+    const toggleMood = (mood) => {
+        setFormData((current) => {
+            const exists = current.moodTags.includes(mood);
+            const nextTags = exists
+                ? current.moodTags.filter((tag) => tag !== mood)
+                : [...current.moodTags, mood];
+
+            return {
+                ...current,
+                moodTags: nextTags.length ? nextTags : [mood],
+            };
+        });
+    };
+
+    const saveProduct = async (event) => {
+        event.preventDefault();
+        setSaving(true);
+        setError('');
+        setNotice('');
+
+        const payload = {
+            ...formData,
+            price: Number(formData.price),
+            floristName: formData.floristName || shopName,
+            floristLogoUrl: formData.floristLogoUrl || shopLogoUrl,
+        };
+
+        try {
+            const response = editingProduct
+                ? await productsAPI.updateProduct(editingProduct.id, payload)
+                : await productsAPI.createProduct(payload);
+            const savedProduct = response.data.data;
+
+            setProducts((current) => {
+                if (editingProduct) {
+                    return current.map((product) => product.id === savedProduct.id ? savedProduct : product);
+                }
+                return [savedProduct, ...current];
+            });
+            setNotice(editingProduct ? 'Product updated.' : 'Product added to your catalog.');
+            resetForm();
+            setActiveTab('products');
+        } catch (err) {
+            setError(apiErrorMessage(err, 'Unable to save product'));
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const toggleStock = async (product) => {
+        const payload = {
+            name: product.name,
+            description: product.description,
+            price: Number(product.price),
+            moodTags: product.moodTags,
+            imageUrl: product.imageUrl,
+            floristName: product.floristName,
+            floristLogoUrl: product.floristLogoUrl || shopLogoUrl,
+            inStock: !product.inStock,
+        };
+
+        try {
+            const response = await productsAPI.updateProduct(product.id, payload);
+            const updatedProduct = response.data.data;
+            setProducts((current) => current.map((item) => item.id === product.id ? updatedProduct : item));
+            setNotice(updatedProduct.inStock ? 'Product is live again.' : 'Product was paused.');
+        } catch (err) {
+            setError(apiErrorMessage(err, 'Unable to update stock status'));
+        }
+    };
+
+    const deleteProduct = async (product) => {
+        try {
+            await productsAPI.deleteProduct(product.id);
+            setProducts((current) => current.filter((item) => item.id !== product.id));
+            setNotice('Product removed from your catalog.');
+        } catch (err) {
+            setError(apiErrorMessage(err, 'Unable to delete product'));
+        }
+    };
+
+    const saveShopProfile = async () => {
+        setSaving(true);
+        setError('');
+        setNotice('');
+        try {
+            const response = await floristAPI.updateProfile({
+                storeName: shopName,
+                bio: shopBio,
+                city: shopCity,
+                logoUrl: shopLogoUrl,
+                maxDailyCapacity: Number(dailyCapacity),
+            });
+            const florist = response.data.data;
+            setShopName(florist.storeName || shopName);
+            setShopBio(florist.bio || shopBio);
+            setShopCity(florist.city || shopCity);
+            setShopLogoUrl(florist.logoUrl || shopLogoUrl);
+            setShopLogoBroken(false);
+            setDailyCapacity(florist.maxDailyCapacity || dailyCapacity);
+            setIsEditingShop(false);
+            setNotice('Shop profile saved.');
+        } catch (err) {
+            setError(apiErrorMessage(err, 'Unable to save shop profile'));
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const uploadShopLogo = async (event) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        setLogoUploading(true);
+        setLogoError('');
+        setError('');
+        setNotice('');
+        try {
+            const response = await floristAPI.uploadProfileImage(file);
+            const logoUrl = response.data.data?.logoUrl || '';
+            setShopLogoUrl(logoUrl);
+            setShopLogoBroken(false);
+            setProducts((current) => current.map((product) => ({ ...product, floristLogoUrl: logoUrl })));
+            setFormData((current) => ({ ...current, floristLogoUrl: logoUrl }));
+            setNotice('Shop logo uploaded.');
+        } catch (err) {
+            setLogoError(apiErrorMessage(err, 'Unable to upload shop logo'));
+        } finally {
+            setLogoUploading(false);
+            event.target.value = '';
+        }
+    };
+
+    const updateOrderStatus = async (order, status) => {
+        setUpdatingOrderId(order.id);
+        setError('');
+        setNotice('');
+        try {
+            const response = await ordersAPI.updateSellerOrderStatus(order.id, status);
+            const updatedOrder = response.data.data;
+            setOrders((current) => current.map((item) => item.id === updatedOrder.id ? updatedOrder : item));
+            setNotice(`Order ${updatedOrder.orderNumber} moved to ${statusLabel(updatedOrder.status)}.`);
+        } catch (err) {
+            setError(apiErrorMessage(err, 'Unable to update order status'));
+        } finally {
+            setUpdatingOrderId(null);
+        }
+    };
+
+    if (!user || !isArtisan) return null;
 
     return (
-        <div className="min-h-screen bg-[#FDFCF8] text-stone-900 selection:bg-stone-200 selection:text-stone-900 font-sans">
-            {/* ─── NAVIGATION ─── */}
-            <nav className="fixed top-0 w-full z-50 bg-[#FDFCF8]/90 backdrop-blur-md border-b border-stone-200 py-4">
-                <div className="max-w-7xl mx-auto px-6 flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                        <Link to="/dashboard" className="text-xl font-serif tracking-tight text-stone-900">
-                            Petal
-                        </Link>
-                        <span className="text-stone-300">|</span>
-                        <span className="text-sm font-medium text-stone-600">Seller Centre</span>
+        <div className="min-h-screen bg-[#F7F3EC] text-stone-900 selection:bg-stone-200 selection:text-stone-900">
+            <nav className="fixed top-0 w-full z-40 bg-[#FDFCF8]/95 backdrop-blur-xl border-b border-stone-200">
+                <div className="max-w-7xl mx-auto h-16 px-4 sm:px-6 flex items-center justify-between">
+                    <div className="flex items-center gap-4 min-w-0">
+                        <Link to="/dashboard" className="text-xl font-serif tracking-tight text-stone-900">Petal</Link>
+                        <span className="hidden sm:inline text-stone-300">|</span>
+                        <span className="hidden sm:inline text-sm font-medium text-stone-600">Seller Centre</span>
                     </div>
-
-                    <div className="flex items-center gap-6">
-                        <Link to="/seller-education" className="text-sm font-medium text-stone-500 hover:text-stone-900 transition-colors">
+                    <div className="flex items-center gap-2 sm:gap-4">
+                        <Link to="/seller-education" className="hidden sm:inline-flex text-sm font-medium text-stone-500 hover:text-stone-900 transition-colors">
                             Seller Education
                         </Link>
                         <Link to="/dashboard" className="text-sm font-medium text-stone-500 hover:text-stone-900 transition-colors">
-                            Return to Shop
+                            Storefront
                         </Link>
-                        <button onClick={handleLogout} className="text-sm font-medium text-stone-900 hover:text-red-700 transition-colors">
-                            Sign Out
+                        <button onClick={handleLogout} className="h-10 w-10 inline-flex items-center justify-center text-stone-500 hover:text-stone-900 hover:bg-white border border-transparent hover:border-stone-200 transition-colors" aria-label="Sign out">
+                            <LogOut size={18} strokeWidth={1.7} />
                         </button>
                     </div>
                 </div>
             </nav>
 
-            <main className="pt-32 pb-24 max-w-7xl mx-auto px-6 min-h-[80vh]">
-                <div className="mb-8 flex justify-between items-end">
-                    <div>
-                        <h1 className="text-3xl font-serif text-stone-900">Seller Centre</h1>
-                        <p className="text-stone-500 text-sm mt-1">Manage your shop, products, and orders.</p>
+            <main className="pt-24 pb-16 max-w-7xl mx-auto px-4 sm:px-6">
+                <section className="mb-6 grid grid-cols-1 xl:grid-cols-[1.5fr_0.8fr] gap-4">
+                    <div className="bg-stone-950 text-white p-6 sm:p-8 min-h-[220px] flex flex-col justify-between overflow-hidden relative">
+                        <div className="absolute inset-0">
+                            <Grainient
+                                color1="#F1D1B8"
+                                color2="#7E9F8A"
+                                color3="#183D35"
+                                timeSpeed={0.16}
+                                colorBalance={-0.12}
+                                warpStrength={1.65}
+                                warpFrequency={5.8}
+                                warpSpeed={1.2}
+                                warpAmplitude={38}
+                                blendAngle={-18}
+                                blendSoftness={0.12}
+                                rotationAmount={360}
+                                noiseScale={1.6}
+                                grainAmount={0.12}
+                                grainScale={2.8}
+                                grainAnimated={false}
+                                contrast={1.35}
+                                gamma={1.0}
+                                saturation={1.05}
+                                centerX={-0.18}
+                                centerY={0.04}
+                                zoom={0.78}
+                            />
+                        </div>
+                        <div className="absolute inset-0 bg-stone-950/45 pointer-events-none" />
+                        <div className="absolute inset-0 bg-gradient-to-r from-stone-950/55 via-stone-950/20 to-transparent pointer-events-none" />
+                        <div className="relative">
+                            <p className="text-xs uppercase tracking-[0.24em] text-white/70 mb-4">Florist Operations</p>
+                            <h1 className="font-serif text-4xl sm:text-5xl leading-tight max-w-2xl">
+                                Manage listings, orders, and your Cebu studio in one place.
+                            </h1>
+                        </div>
+                        <div className="relative mt-8 flex flex-wrap gap-3">
+                            <button onClick={() => { resetForm(); setActiveTab('newProduct'); }} className="h-11 px-5 bg-white text-stone-950 text-sm font-semibold inline-flex items-center gap-2 hover:bg-stone-100 active:scale-[0.98] transition">
+                                <Plus size={16} /> Add Product
+                            </button>
+                            <button onClick={() => setActiveTab('orders')} className="h-11 px-5 border border-white/20 text-white text-sm font-semibold inline-flex items-center gap-2 hover:bg-white/10 active:scale-[0.98] transition">
+                                <Truck size={16} /> Prepare Orders
+                            </button>
+                        </div>
                     </div>
-                </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-                    {/* ─── SIDEBAR ─── */}
-                    <aside className="lg:col-span-3">
-                        <div className="bg-white border border-stone-200 rounded-sm p-4 sticky top-24">
-                            <div className="mb-6">
-                                <h3 className="text-[10px] font-bold text-stone-400 uppercase tracking-widest mb-3 px-3">Dashboard</h3>
-                                <ul className="space-y-1">
-                                    <li>
-                                        <button onClick={() => setArtisanTab('overview')} className={`w-full text-left px-3 py-2 text-sm rounded-sm transition-colors ${artisanTab === 'overview' ? 'bg-stone-100 text-stone-900 font-medium' : 'text-stone-600 hover:bg-stone-50'}`}>Overview</button>
-                                    </li>
-                                </ul>
-                            </div>
-                            <div className="mb-6">
-                                <h3 className="text-[10px] font-bold text-stone-400 uppercase tracking-widest mb-3 px-3">Orders</h3>
-                                <ul className="space-y-1">
-                                    <li><button onClick={() => setArtisanTab('orders')} className={`w-full text-left px-3 py-2 text-sm rounded-sm transition-colors ${artisanTab === 'orders' ? 'bg-stone-100 text-stone-900 font-medium' : 'text-stone-600 hover:bg-stone-50'}`}>My Orders</button></li>
-                                    <li><button className="w-full text-left px-3 py-2 text-sm text-stone-600 hover:bg-stone-50 rounded-sm transition-colors">Cancellations</button></li>
-                                    <li><button className="w-full text-left px-3 py-2 text-sm text-stone-600 hover:bg-stone-50 rounded-sm transition-colors">Return / Refund</button></li>
-                                </ul>
-                            </div>
-                            <div className="mb-6">
-                                <h3 className="text-[10px] font-bold text-stone-400 uppercase tracking-widest mb-3 px-3">Products</h3>
-                                <ul className="space-y-1">
-                                    <li><button onClick={() => setArtisanTab('products')} className={`w-full text-left px-3 py-2 text-sm rounded-sm transition-colors ${artisanTab === 'products' ? 'bg-stone-100 text-stone-900 font-medium' : 'text-stone-600 hover:bg-stone-50'}`}>My Products</button></li>
-                                    <li><button className="w-full text-left px-3 py-2 text-sm text-stone-600 hover:bg-stone-50 rounded-sm transition-colors">Add New Product</button></li>
-                                </ul>
-                            </div>
-                            <div className="mb-6">
-                                <h3 className="text-[10px] font-bold text-stone-400 uppercase tracking-widest mb-3 px-3">Shop</h3>
-                                <ul className="space-y-1">
-                                    <li><button onClick={() => setArtisanTab('shopInfo')} className={`w-full text-left px-3 py-2 text-sm rounded-sm transition-colors ${artisanTab === 'shopInfo' ? 'bg-stone-100 text-stone-900 font-medium' : 'text-stone-600 hover:bg-stone-50'}`}>Shop Information</button></li>
-                                    <li><button className="w-full text-left px-3 py-2 text-sm text-stone-600 hover:bg-stone-50 rounded-sm transition-colors">Shop Setting</button></li>
-                                </ul>
-                            </div>
+                    <div className="bg-white border border-stone-200 p-6">
+                        <div className="flex items-start justify-between">
                             <div>
-                                <h3 className="text-[10px] font-bold text-stone-400 uppercase tracking-widest mb-3 px-3">Finance</h3>
-                                <ul className="space-y-1">
-                                    <li><button className="w-full text-left px-3 py-2 text-sm text-stone-600 hover:bg-stone-50 rounded-sm transition-colors">My Income</button></li>
-                                    <li><button className="w-full text-left px-3 py-2 text-sm text-stone-600 hover:bg-stone-50 rounded-sm transition-colors">Bank Accounts</button></li>
-                                </ul>
+                                <p className="text-xs uppercase tracking-[0.22em] text-stone-400">Studio Health</p>
+                                <h2 className="mt-3 text-2xl font-serif text-stone-900">{shopName}</h2>
+                            </div>
+                            <div className="h-12 w-12 rounded-full bg-stone-100 border border-stone-200 flex items-center justify-center">
+                                <Leaf size={20} strokeWidth={1.6} />
                             </div>
                         </div>
+                        <div className="mt-8 space-y-4">
+                            <div>
+                                <div className="flex justify-between text-sm mb-2">
+                                    <span className="text-stone-500">Profile readiness</span>
+                                    <span className="font-medium">82%</span>
+                                </div>
+                                <div className="h-2 bg-stone-100 overflow-hidden">
+                                    <div className="h-full w-[82%] bg-stone-900" />
+                                </div>
+                            </div>
+                            <p className="text-sm text-stone-500 leading-relaxed">
+                                Add more product photos and delivery rules next to raise customer trust before checkout.
+                            </p>
+                        </div>
+                    </div>
+                </section>
+
+                {(error || notice) && (
+                    <div className={`mb-4 border px-4 py-3 text-sm flex items-center gap-2 ${error ? 'bg-red-50 border-red-200 text-red-700' : 'bg-green-50 border-green-200 text-green-800'}`}>
+                        {error ? <AlertCircle size={16} /> : <CheckCircle2 size={16} />}
+                        {error || notice}
+                    </div>
+                )}
+
+                <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr] gap-5">
+                    <aside className="lg:sticky lg:top-24 self-start bg-white border border-stone-200 p-3">
+                        {navGroups.map((group) => (
+                            <div key={group.label} className="mb-5 last:mb-0">
+                                <p className="px-3 mb-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-stone-400">{group.label}</p>
+                                <div className="space-y-1">
+                                    {group.items.map((item) => {
+                                        const Icon = item.icon;
+                                        return (
+                                            <button
+                                                key={item.id}
+                                                onClick={() => {
+                                                    if (item.id === 'newProduct') resetForm();
+                                                    setActiveTab(item.id);
+                                                }}
+                                                className={`w-full h-11 px-3 flex items-center gap-3 text-sm text-left transition-colors ${activeTab === item.id ? 'bg-stone-900 text-white' : 'text-stone-600 hover:bg-stone-50 hover:text-stone-950'}`}
+                                            >
+                                                <Icon size={17} strokeWidth={1.7} />
+                                                {item.label}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        ))}
                     </aside>
 
-                    {/* ─── MAIN CONTENT ─── */}
-                    <div className="lg:col-span-9 space-y-6">
-
-                        {/* ─── OVERVIEW TAB ─── */}
-                        {artisanTab === 'overview' && (
-                            <>
-                                {/* To Do List */}
-                                <div className="bg-white border border-stone-200 rounded-sm p-6">
-                                    <h3 className="text-lg font-serif text-stone-900 mb-6 font-medium">To Do List</h3>
-                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                                        <div className="text-center group cursor-pointer">
-                                            <p className="text-2xl font-light text-stone-900 group-hover:text-amber-600 transition-colors">0</p>
-                                            <p className="text-xs text-stone-500 mt-1 uppercase tracking-wider">Unpaid</p>
-                                        </div>
-                                        <div className="text-center group cursor-pointer border-l border-stone-100">
-                                            <p className="text-2xl font-light text-stone-900 group-hover:text-amber-600 transition-colors">3</p>
-                                            <p className="text-xs text-stone-500 mt-1 uppercase tracking-wider">To Process Shipment</p>
-                                        </div>
-                                        <div className="text-center group cursor-pointer border-l border-stone-100">
-                                            <p className="text-2xl font-light text-stone-900 group-hover:text-amber-600 transition-colors">0</p>
-                                            <p className="text-xs text-stone-500 mt-1 uppercase tracking-wider">Pending Return</p>
-                                        </div>
-                                        <div className="text-center group cursor-pointer border-l border-stone-100">
-                                            <p className="text-2xl font-light text-stone-900 group-hover:text-amber-600 transition-colors">1</p>
-                                            <p className="text-xs text-stone-500 mt-1 uppercase tracking-wider">Sold Out</p>
-                                        </div>
-                                    </div>
+                    <section className="min-w-0">
+                        {activeTab === 'overview' && (
+                            <div className="space-y-5">
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    {metrics.map((metric) => {
+                                        const Icon = metric.icon;
+                                        return (
+                                            <article key={metric.label} className="bg-white border border-stone-200 p-5">
+                                                <div className="flex items-center justify-between mb-5">
+                                                    <p className="text-sm text-stone-500">{metric.label}</p>
+                                                    <Icon size={18} strokeWidth={1.7} className="text-stone-400" />
+                                                </div>
+                                                <p className="text-3xl font-semibold tracking-tight text-stone-950">{metric.value}</p>
+                                                <p className="mt-2 text-xs text-stone-500">{metric.helper}</p>
+                                            </article>
+                                        );
+                                    })}
                                 </div>
 
-                                {/* Business Insights */}
-                                <div className="bg-white border border-stone-200 rounded-sm p-6">
-                                    <div className="flex justify-between items-center mb-6">
-                                        <h3 className="text-lg font-serif text-stone-900 font-medium">Business Insights</h3>
-                                        <button className="text-xs text-stone-500 hover:text-stone-900 flex items-center gap-1 transition-colors">More <ArrowRight size={14} /></button>
-                                    </div>
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                        <KpiCard title="Visitors" value="124" />
-                                        <KpiCard title="Page Views" value="459" />
-                                        <KpiCard title="Orders" value="4" />
-                                    </div>
-                                </div>
-                            </>
-                        )}
-
-                        {/* ─── ORDERS TAB ─── */}
-                        {artisanTab === 'orders' && (
-                            <div className="bg-white border border-stone-200 rounded-sm">
-                                <div className="border-b border-stone-200">
-                                    <nav className="flex px-2 overflow-x-auto" aria-label="Tabs">
-                                        {['All', 'Unpaid', 'To Ship', 'Shipping', 'Completed', 'Cancelled'].map((tab) => (
-                                            <button
-                                                key={tab}
-                                                onClick={() => setOrderTab(tab.toLowerCase())}
-                                                className={`whitespace-nowrap py-4 px-6 text-sm font-medium border-b-2 transition-colors ${orderTab === tab.toLowerCase()
-                                                    ? 'border-stone-900 text-stone-900'
-                                                    : 'border-transparent text-stone-500 hover:text-stone-700 hover:border-stone-300'
-                                                    }`}
-                                            >
-                                                {tab}
+                                <div className="grid grid-cols-1 xl:grid-cols-[1.1fr_0.9fr] gap-5">
+                                    <div className="bg-white border border-stone-200">
+                                        <div className="p-5 border-b border-stone-100 flex items-center justify-between">
+                                            <div>
+                                                <h2 className="font-serif text-2xl">Order Work Queue</h2>
+                                                <p className="text-sm text-stone-500 mt-1">Shopee-style actions for today's florist tasks.</p>
+                                            </div>
+                                            <button onClick={() => setActiveTab('orders')} className="text-sm font-medium inline-flex items-center gap-1 text-stone-700 hover:text-stone-950">
+                                                View all <ArrowRight size={14} />
                                             </button>
-                                        ))}
-                                    </nav>
-                                </div>
-                                <div className="p-6">
-                                    <div className="flex gap-4 mb-6">
-                                        <div className="flex-1 relative">
-                                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" size={16} />
-                                            <input type="text" placeholder="Search Order ID or Buyer Name" className="w-full pl-10 pr-4 py-2 text-sm border border-stone-200 rounded-sm focus:outline-none focus:border-stone-400 bg-stone-50" />
                                         </div>
-                                        <button className="px-4 py-2 bg-stone-900 text-white text-sm font-medium rounded-sm hover:bg-stone-800 transition-colors">Search</button>
+                                        <div className="divide-y divide-stone-100">
+                                            {orders.slice(0, 4).map((order) => (
+                                                <Link key={order.id} to={`/seller-orders/${order.id}`} className="w-full p-5 text-left hover:bg-stone-50 transition-colors grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3">
+                                                    <div>
+                                                        <p className="text-xs uppercase tracking-[0.18em] text-stone-400">{order.orderNumber}</p>
+                                                        <p className="mt-2 font-medium text-stone-950">{order.itemSummary}</p>
+                                                        <p className="text-sm text-stone-500">{order.buyerName} · {deliveryLabel(order)} · {paymentLabel(order.paymentMethod)}</p>
+                                                    </div>
+                                                    <div className="md:text-right">
+                                                        <span className={`inline-flex border px-2.5 py-1 text-xs font-medium ${statusClass(order.status)}`}>{statusLabel(order.status)}</span>
+                                                        <p className="mt-2 font-semibold">{currency(order.sellerSubtotal)}</p>
+                                                    </div>
+                                                </Link>
+                                            ))}
+                                            {!orders.length && (
+                                                <div className="p-5 text-sm text-stone-500">
+                                                    No customer orders yet. New checkout orders will appear here for fulfillment.
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
 
-                                    {/* Orders Table */}
-                                    <div className="overflow-x-auto">
-                                        <table className="w-full text-sm text-left">
-                                            <thead className="text-xs text-stone-500 uppercase bg-stone-50 border-y border-stone-200">
-                                                <tr>
-                                                    <th className="px-4 py-3 font-medium">Products</th>
-                                                    <th className="px-4 py-3 font-medium text-center">Total Price</th>
-                                                    <th className="px-4 py-3 font-medium text-center">Status</th>
-                                                    <th className="px-4 py-3 font-medium text-center">Actions</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                <tr className="border-b border-stone-100">
-                                                    <td className="px-4 py-4 min-w-[250px]">
-                                                        <div className="flex gap-3 items-start">
-                                                            <img src={products[0].image} className="w-12 h-12 object-cover border border-stone-200 rounded-sm flex-shrink-0" alt="" />
-                                                            <div>
-                                                                <p className="text-stone-900 font-medium">{products[0].name}</p>
-                                                                <p className="text-stone-500 text-xs">x1</p>
-                                                            </div>
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-4 py-4 text-center font-medium text-stone-900 whitespace-nowrap">{products[0].price}</td>
-                                                    <td className="px-4 py-4 text-center">
-                                                        <span className="bg-amber-100 text-amber-800 text-[10px] uppercase font-bold px-2 py-1 rounded-sm whitespace-nowrap">To Ship</span>
-                                                    </td>
-                                                    <td className="px-4 py-4 text-center">
-                                                        <button className="text-sm text-stone-600 border border-stone-300 px-3 py-1.5 rounded-sm hover:bg-stone-50 transition-colors whitespace-nowrap">Arrange Shipment</button>
-                                                    </td>
-                                                </tr>
-                                                <tr className="border-b border-stone-100">
-                                                    <td className="px-4 py-4 min-w-[250px]">
-                                                        <div className="flex gap-3 items-start">
-                                                            <img src={products[3].image} className="w-12 h-12 object-cover border border-stone-200 rounded-sm flex-shrink-0" alt="" />
-                                                            <div>
-                                                                <p className="text-stone-900 font-medium">{products[3].name}</p>
-                                                                <p className="text-stone-500 text-xs">x2</p>
-                                                            </div>
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-4 py-4 text-center font-medium text-stone-900 whitespace-nowrap">$110</td>
-                                                    <td className="px-4 py-4 text-center">
-                                                        <span className="bg-blue-100 text-blue-800 text-[10px] uppercase font-bold px-2 py-1 rounded-sm whitespace-nowrap">Shipping</span>
-                                                    </td>
-                                                    <td className="px-4 py-4 text-center">
-                                                        <button className="text-sm text-stone-600 hover:text-stone-900 transition-colors border-b border-stone-300 hover:border-stone-900 pb-0.5 whitespace-nowrap">Check Logistics</button>
-                                                    </td>
-                                                </tr>
-                                            </tbody>
-                                        </table>
+                                    <div className="bg-white border border-stone-200 p-5">
+                                        <div className="flex items-center justify-between mb-5">
+                                            <div>
+                                                <h2 className="font-serif text-2xl">Catalog Signals</h2>
+                                                <p className="text-sm text-stone-500 mt-1">What needs attention before customers buy.</p>
+                                            </div>
+                                            <Eye size={18} className="text-stone-400" />
+                                        </div>
+                                        <div className="space-y-4">
+                                            <div className="p-4 border border-amber-200 bg-amber-50">
+                                                <p className="text-sm font-medium text-amber-900">Photo depth is low</p>
+                                                <p className="text-sm text-amber-800/80 mt-1">Add 3 to 5 photos per listing so product detail pages feel more like a marketplace.</p>
+                                            </div>
+                                            <div className="p-4 border border-stone-200">
+                                                <p className="text-sm font-medium text-stone-950">Mood coverage</p>
+                                        <p className="text-sm text-stone-500 mt-1">{products.length ? `${products.length} products across ${new Set(products.flatMap((product) => product.moodTags || [])).size} moods.` : 'Add your first product to appear in mood shopping.'}</p>
+                                            </div>
+                                            <button onClick={() => setActiveTab('newProduct')} className="w-full h-11 bg-stone-900 text-white text-sm font-semibold hover:bg-stone-800 active:scale-[0.99] transition">
+                                                Create a new listing
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
                         )}
 
-                        {/* ─── PRODUCTS TAB ─── */}
-                        {artisanTab === 'products' && (
-                            <div className="bg-white border border-stone-200 rounded-sm">
-                                <div className="border-b border-stone-200 flex flex-col sm:flex-row justify-between sm:items-center pr-6 gap-4 sm:gap-0">
-                                    <nav className="flex px-2 overflow-x-auto" aria-label="Tabs">
-                                        {['All', 'Live', 'Sold Out', 'Reviewing', 'Violation'].map((tab) => (
-                                            <button
-                                                key={tab}
-                                                onClick={() => setProductTab(tab.toLowerCase())}
-                                                className={`whitespace-nowrap py-4 px-6 text-sm font-medium border-b-2 transition-colors ${productTab === tab.toLowerCase()
-                                                    ? 'border-stone-900 text-stone-900'
-                                                    : 'border-transparent text-stone-500 hover:text-stone-700 hover:border-stone-300'
-                                                    }`}
-                                            >
-                                                {tab} {tab === 'Live' && '(5)'} {tab === 'Sold Out' && '(1)'}
-                                            </button>
-                                        ))}
-                                    </nav>
-                                    <div className="px-6 pb-4 sm:p-0 sm:pl-4 self-start sm:self-center">
-                                        <button className="flex items-center gap-2 bg-stone-900 text-white px-4 py-2 rounded-sm text-sm font-medium hover:bg-stone-800 transition-colors whitespace-nowrap">
-                                            <Plus size={16} /> Add New Product
+                        {activeTab === 'orders' && (
+                            <div className="bg-white border border-stone-200">
+                                <div className="p-5 border-b border-stone-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                                    <div>
+                                        <h2 className="font-serif text-2xl">Orders</h2>
+                                        <p className="text-sm text-stone-500 mt-1">Review buyer messages, delivery windows, and preparation status.</p>
+                                    </div>
+                                    <button className="h-10 px-4 bg-stone-900 text-white text-sm font-semibold inline-flex items-center gap-2">
+                                        <Truck size={16} /> Arrange Pickup
+                                    </button>
+                                </div>
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-sm">
+                                        <thead className="bg-stone-50 text-left text-xs uppercase tracking-[0.14em] text-stone-400">
+                                            <tr>
+                                                <th className="px-5 py-3 font-medium">Order</th>
+                                                <th className="px-5 py-3 font-medium">Buyer</th>
+                                                <th className="px-5 py-3 font-medium">Delivery</th>
+                                                <th className="px-5 py-3 font-medium">Total</th>
+                                                <th className="px-5 py-3 font-medium">Status</th>
+                                                <th className="px-5 py-3 font-medium text-right">Action</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-stone-100">
+                                            {orders.map((order) => (
+                                                <tr key={order.id} className="hover:bg-stone-50">
+                                                    <td className="px-5 py-4 font-medium text-stone-950">{order.orderNumber}<p className="text-xs font-normal text-stone-500 mt-1">{order.itemSummary}</p></td>
+                                                    <td className="px-5 py-4 text-stone-600">{order.buyerName}<p className="text-xs text-stone-400 mt-1">For {order.recipientName}</p><p className="text-xs text-stone-400 mt-1">{paymentLabel(order.paymentMethod)}</p></td>
+                                                    <td className="px-5 py-4 text-stone-600">{deliveryLabel(order)}</td>
+                                                    <td className="px-5 py-4 font-semibold">{currency(order.sellerSubtotal)}</td>
+                                                    <td className="px-5 py-4"><span className={`inline-flex border px-2.5 py-1 text-xs font-medium ${statusClass(order.status)}`}>{statusLabel(order.status)}</span></td>
+                                                    <td className="px-5 py-4 text-right">
+                                                        <Link to={`/seller-orders/${order.id}`} className="mr-3 text-sm font-medium text-stone-700 hover:text-stone-950">View</Link>
+                                                        {nextStatus(order.status) ? (
+                                                            <button
+                                                                onClick={() => updateOrderStatus(order, nextStatus(order.status))}
+                                                                disabled={updatingOrderId === order.id}
+                                                                className="text-sm font-medium text-stone-700 hover:text-stone-950 disabled:text-stone-300"
+                                                            >
+                                                                {updatingOrderId === order.id ? 'Updating...' : nextStatusLabel(order.status)}
+                                                            </button>
+                                                        ) : (
+                                                            <span className="text-xs text-stone-400">No action</span>
+                                                        )}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                            {!orders.length && (
+                                                <tr>
+                                                    <td colSpan="6" className="px-5 py-12 text-center text-stone-500">
+                                                        No seller orders yet. Customer checkout orders will land here once they include your products.
+                                                    </td>
+                                                </tr>
+                                            )}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'products' && (
+                            <div className="bg-white border border-stone-200">
+                                <div className="p-5 border-b border-stone-100 flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+                                    <div>
+                                        <h2 className="font-serif text-2xl">Products</h2>
+                                        <p className="text-sm text-stone-500 mt-1">Create, pause, and tune listings that appear across Browse and Shop by Mood.</p>
+                                    </div>
+                                    <div className="flex flex-col sm:flex-row gap-3">
+                                        <div className="relative">
+                                            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
+                                            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search listings" className="h-10 w-full sm:w-64 pl-9 pr-3 border border-stone-200 bg-stone-50 text-sm outline-none focus:border-stone-400" />
+                                        </div>
+                                        <button onClick={() => { resetForm(); setActiveTab('newProduct'); }} className="h-10 px-4 bg-stone-900 text-white text-sm font-semibold inline-flex items-center justify-center gap-2">
+                                            <Plus size={16} /> Add Product
                                         </button>
                                     </div>
                                 </div>
-                                <div className="p-6">
-                                    <div className="flex gap-4 mb-6">
-                                        <div className="flex-1 relative">
-                                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" size={16} />
-                                            <input type="text" placeholder="Search product name or SKU" className="w-full pl-10 pr-4 py-2 text-sm border border-stone-200 rounded-sm focus:outline-none focus:border-stone-400 bg-stone-50" />
-                                        </div>
-                                        <button className="px-4 py-2 bg-stone-100 text-stone-900 border border-stone-200 text-sm font-medium rounded-sm hover:bg-stone-200 transition-colors whitespace-nowrap">Category <ChevronDown size={14} className="inline ml-1" /></button>
-                                    </div>
 
-                                    {/* Products Table */}
+                                {loading ? (
+                                    <div className="p-5 space-y-3">
+                                        {[1, 2, 3].map((item) => <div key={item} className="h-20 bg-stone-100 animate-pulse" />)}
+                                    </div>
+                                ) : (
                                     <div className="overflow-x-auto">
-                                        <table className="w-full text-sm text-left">
-                                            <thead className="text-xs text-stone-500 uppercase bg-stone-50 border-y border-stone-200">
+                                        <table className="w-full text-sm">
+                                            <thead className="bg-stone-50 text-left text-xs uppercase tracking-[0.14em] text-stone-400">
                                                 <tr>
-                                                    <th className="px-4 py-3 font-medium">Product Name</th>
-                                                    <th className="px-4 py-3 font-medium text-center">Price</th>
-                                                    <th className="px-4 py-3 font-medium text-center">Stock</th>
-                                                    <th className="px-4 py-3 font-medium text-center">Sales</th>
-                                                    <th className="px-4 py-3 font-medium text-center">Actions</th>
+                                                    <th className="px-5 py-3 font-medium">Product</th>
+                                                    <th className="px-5 py-3 font-medium">Moods</th>
+                                                    <th className="px-5 py-3 font-medium">Price</th>
+                                                    <th className="px-5 py-3 font-medium">Status</th>
+                                                    <th className="px-5 py-3 font-medium text-right">Actions</th>
                                                 </tr>
                                             </thead>
-                                            <tbody>
-                                                {products.map((product) => (
-                                                    <tr key={product.id} className="border-b border-stone-100 hover:bg-stone-50/50 transition-colors">
-                                                        <td className="px-4 py-4 min-w-[250px]">
-                                                            <div className="flex gap-3 items-start">
-                                                                <img src={product.image} className="w-12 h-12 object-cover border border-stone-200 rounded-sm flex-shrink-0" alt="" />
+                                            <tbody className="divide-y divide-stone-100">
+                                                {filteredProducts.map((product) => (
+                                                    <tr key={product.id} className="hover:bg-stone-50 align-top">
+                                                        <td className="px-5 py-4 min-w-[280px]">
+                                                            <div className="flex gap-3">
+                                                                <img src={product.imageUrl} alt={product.name} className="w-14 h-16 object-cover bg-stone-100 border border-stone-200" />
                                                                 <div>
-                                                                    <p className="text-stone-900 font-medium line-clamp-2">{product.name}</p>
-                                                                    <p className="text-stone-500 text-xs mt-1 border border-stone-200 inline-block px-1 bg-white">SKU: {product.name.substring(0, 3).toUpperCase()}-00{product.id}</p>
+                                                                    <p className="font-medium text-stone-950">{product.name}</p>
+                                                                    <p className="text-xs text-stone-500 mt-1 line-clamp-2 max-w-sm">{product.description}</p>
+                                                                    <p className="text-[11px] text-stone-400 mt-2">SKU PET-{String(product.id).padStart(4, '0')}</p>
                                                                 </div>
                                                             </div>
                                                         </td>
-                                                        <td className="px-4 py-4 text-center font-medium text-stone-900 whitespace-nowrap">{product.price}</td>
-                                                        <td className="px-4 py-4 text-center">
-                                                            {product.id === 2 ? <span className="text-red-500 font-medium">0</span> : <span className="text-stone-900">{Math.floor(Math.random() * 50) + 5}</span>}
+                                                        <td className="px-5 py-4 min-w-[180px]">
+                                                            <div className="flex flex-wrap gap-1.5">
+                                                                {(product.moodTags || []).map((tag) => <span key={tag} className="border border-stone-200 bg-white px-2 py-1 text-[11px] text-stone-600 capitalize">{tag}</span>)}
+                                                            </div>
                                                         </td>
-                                                        <td className="px-4 py-4 text-center text-stone-500">
-                                                            {Math.floor(Math.random() * 20)}
+                                                        <td className="px-5 py-4 font-semibold whitespace-nowrap">{currency(product.price)}</td>
+                                                        <td className="px-5 py-4">
+                                                            <span className={`inline-flex border px-2.5 py-1 text-xs font-medium ${product.inStock ? 'bg-green-50 text-green-800 border-green-200' : 'bg-stone-100 text-stone-500 border-stone-200'}`}>
+                                                                {product.inStock ? 'Live' : 'Paused'}
+                                                            </span>
                                                         </td>
-                                                        <td className="px-4 py-4 text-center">
-                                                            <div className="flex items-center justify-center gap-3">
-                                                                <button className="text-sm text-stone-600 hover:text-stone-900 transition-colors font-medium">Edit</button>
-                                                                <button className="text-sm text-stone-400 hover:text-stone-900 transition-colors">More</button>
+                                                        <td className="px-5 py-4 text-right">
+                                                            <div className="flex items-center justify-end gap-3 whitespace-nowrap">
+                                                                <button onClick={() => editProduct(product)} className="text-sm font-medium text-stone-700 hover:text-stone-950">Edit</button>
+                                                                <button onClick={() => toggleStock(product)} className="text-sm text-stone-500 hover:text-stone-950">{product.inStock ? 'Pause' : 'Publish'}</button>
+                                                                <button onClick={() => deleteProduct(product)} className="text-sm text-red-600 hover:text-red-800">Delete</button>
                                                             </div>
                                                         </td>
                                                     </tr>
                                                 ))}
+                                                {!filteredProducts.length && (
+                                                    <tr>
+                                                        <td colSpan="5" className="px-5 py-12 text-center text-stone-500">
+                                                            No products found. Add a listing to start selling.
+                                                        </td>
+                                                    </tr>
+                                                )}
                                             </tbody>
                                         </table>
                                     </div>
-                                </div>
+                                )}
                             </div>
                         )}
 
-                        {/* ─── SHOP INFO TAB ─── */}
-                        {artisanTab === 'shopInfo' && (
-                            <div className="bg-white border border-stone-200 rounded-sm p-6 lg:p-8">
-                                <div className="flex items-center justify-between mb-8 pb-4 border-b border-stone-100">
+                        {activeTab === 'newProduct' && (
+                            <form onSubmit={saveProduct} className="bg-white border border-stone-200">
+                                <div className="p-5 border-b border-stone-100 flex items-center justify-between">
                                     <div>
-                                        <h3 className="text-xl font-serif text-stone-900">Shop Information</h3>
-                                        <p className="text-stone-500 text-sm mt-1">Manage your studio's public-facing profile and branding.</p>
+                                        <h2 className="font-serif text-2xl">{editingProduct ? 'Edit Product' : 'Add Product'}</h2>
+                                        <p className="text-sm text-stone-500 mt-1">Listings are immediately available in customer browsing once published.</p>
                                     </div>
-                                    <button
-                                        onClick={() => setIsEditingShop(!isEditingShop)}
-                                        className="text-xs uppercase tracking-widest text-stone-500 hover:text-stone-900 flex items-center gap-2 transition-colors border border-stone-200 px-4 py-2 rounded-sm hover:bg-stone-50"
-                                    >
-                                        <Edit2 size={14} /> {isEditingShop ? 'Cancel' : 'Edit Profile'}
+                                    {editingProduct && (
+                                        <button type="button" onClick={resetForm} className="h-10 px-3 border border-stone-200 text-sm inline-flex items-center gap-2 hover:bg-stone-50">
+                                            <X size={15} /> Clear
+                                        </button>
+                                    )}
+                                </div>
+
+                                <div className="p-5 grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_280px] gap-6">
+                                    <div className="space-y-5">
+                                        <label className="block">
+                                            <span className="text-sm font-medium text-stone-700">Product name</span>
+                                            <input required value={formData.name} onChange={(event) => setFormData({ ...formData, name: event.target.value })} className="mt-2 h-11 w-full border border-stone-200 bg-stone-50 px-3 outline-none focus:border-stone-500" />
+                                        </label>
+
+                                        <label className="block">
+                                            <span className="text-sm font-medium text-stone-700">Description</span>
+                                            <textarea required rows={5} value={formData.description} onChange={(event) => setFormData({ ...formData, description: event.target.value })} className="mt-2 w-full border border-stone-200 bg-stone-50 p-3 outline-none focus:border-stone-500" />
+                                        </label>
+
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <label className="block">
+                                                <span className="text-sm font-medium text-stone-700">Price</span>
+                                                <input required type="number" min="1" step="0.01" value={formData.price} onChange={(event) => setFormData({ ...formData, price: event.target.value })} className="mt-2 h-11 w-full border border-stone-200 bg-stone-50 px-3 outline-none focus:border-stone-500" />
+                                            </label>
+                                            <label className="block">
+                                                <span className="text-sm font-medium text-stone-700">Image URL</span>
+                                                <input required value={formData.imageUrl} onChange={(event) => setFormData({ ...formData, imageUrl: event.target.value })} className="mt-2 h-11 w-full border border-stone-200 bg-stone-50 px-3 outline-none focus:border-stone-500" />
+                                            </label>
+                                        </div>
+
+                                        <div>
+                                            <p className="text-sm font-medium text-stone-700 mb-2">Mood tags</p>
+                                            <div className="flex flex-wrap gap-2">
+                                                {moodOptions.map((mood) => (
+                                                    <button key={mood} type="button" onClick={() => toggleMood(mood)} className={`h-9 px-3 border text-sm capitalize transition-colors ${formData.moodTags.includes(mood) ? 'bg-stone-900 text-white border-stone-900' : 'bg-white text-stone-600 border-stone-200 hover:border-stone-400'}`}>
+                                                        {mood}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <aside className="space-y-4">
+                                        <div className="border border-stone-200 p-4 max-w-[280px] xl:max-w-none">
+                                            <p className="text-sm font-medium text-stone-700 mb-3">Marketplace Preview</p>
+                                            <div className="w-full max-h-48 overflow-hidden bg-stone-100 border border-stone-100">
+                                                <img src={formData.imageUrl || blankListing.imageUrl} alt="" className="w-full h-48 object-cover" />
+                                            </div>
+                                            <p className="mt-4 text-xs uppercase tracking-[0.18em] text-stone-400">{formData.floristName || shopName}</p>
+                                            <p className="mt-1 font-serif text-2xl">{formData.name || 'Product name'}</p>
+                                            <p className="mt-2 text-sm text-stone-500 line-clamp-3">{formData.description || 'Product description appears here.'}</p>
+                                            <p className="mt-3 font-semibold">{formData.price ? currency(formData.price) : '₱0.00'}</p>
+                                        </div>
+
+                                        <label className="flex items-center justify-between gap-4 border border-stone-200 p-4">
+                                            <span>
+                                                <span className="block text-sm font-medium text-stone-800">Publish listing</span>
+                                                <span className="block text-xs text-stone-500 mt-1">Turn off to keep this product paused.</span>
+                                            </span>
+                                            <input type="checkbox" checked={formData.inStock} onChange={(event) => setFormData({ ...formData, inStock: event.target.checked })} className="h-5 w-5 accent-stone-900" />
+                                        </label>
+
+                                        <button disabled={saving} className="w-full h-12 bg-stone-900 text-white text-sm font-semibold hover:bg-stone-800 disabled:opacity-60 active:scale-[0.99] transition">
+                                            {saving ? 'Saving...' : editingProduct ? 'Save Changes' : 'Publish Product'}
+                                        </button>
+                                    </aside>
+                                </div>
+                            </form>
+                        )}
+
+                        {activeTab === 'shopInfo' && (
+                            <div className="bg-white border border-stone-200 p-5 sm:p-6">
+                                <div className="flex items-center justify-between pb-5 border-b border-stone-100">
+                                    <div>
+                                        <h2 className="font-serif text-2xl">Shop Profile</h2>
+                                        <p className="text-sm text-stone-500 mt-1">The public trust layer beside each product.</p>
+                                    </div>
+                                    <button onClick={() => setIsEditingShop(!isEditingShop)} className="h-10 px-4 border border-stone-200 text-sm font-medium inline-flex items-center gap-2 hover:bg-stone-50">
+                                        <Edit3 size={15} /> {isEditingShop ? 'Cancel' : 'Edit'}
                                     </button>
                                 </div>
 
-                                <div className="flex flex-col md:flex-row gap-10">
-                                    <div className="flex-1 space-y-8">
-                                        <div className="space-y-2">
-                                            <label className="text-xs uppercase tracking-wider text-stone-400 font-medium">Shop Name</label>
-                                            {isEditingShop ? (
-                                                <input
-                                                    type="text"
-                                                    value={shopName}
-                                                    onChange={(e) => setShopName(e.target.value)}
-                                                    className="w-full bg-stone-50 border border-stone-200 px-3 py-2 text-stone-900 outline-none focus:border-stone-900 transition-colors rounded-sm"
-                                                />
-                                            ) : (
-                                                <p className="text-stone-800 text-lg font-medium">{shopName}</p>
-                                            )}
-                                        </div>
-
-                                        <div className="space-y-2">
-                                            <label className="text-xs uppercase tracking-wider text-stone-400 font-medium flex items-center gap-2">
-                                                Studio Bio
-                                                <AlertCircle size={14} className="text-stone-300 cursor-help" />
-                                            </label>
-                                            {isEditingShop ? (
-                                                <textarea
-                                                    rows={4}
-                                                    value={shopBio}
-                                                    onChange={(e) => setShopBio(e.target.value)}
-                                                    className="w-full bg-stone-50 border border-stone-200 px-3 py-2 text-stone-900 outline-none focus:border-stone-900 transition-colors rounded-sm"
-                                                />
-                                            ) : (
-                                                <p className="text-stone-600 font-light leading-relaxed">{shopBio}</p>
-                                            )}
-                                        </div>
-
-                                        {isEditingShop && (
-                                            <div className="pt-4 flex justify-end">
-                                                <button
-                                                    onClick={() => setIsEditingShop(false)}
-                                                    className="bg-stone-900 text-white px-6 py-2.5 text-sm font-medium hover:bg-stone-800 transition-colors rounded-sm"
-                                                >
-                                                    Save Shop Information
-                                                </button>
+                                <div className="mt-6 grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-8">
+                                    <div className="space-y-5">
+                                        <div>
+                                            <span className="text-sm font-medium text-stone-700">Store logo</span>
+                                            <div className="mt-2 flex flex-col sm:flex-row sm:items-center gap-3">
+                                                <div className="h-16 w-16 shrink-0 overflow-hidden rounded-full border border-stone-200 bg-stone-100 flex items-center justify-center">
+                                                    {shopLogoUrl && !shopLogoBroken ? (
+                                                        <img src={mediaUrl(shopLogoUrl)} alt="" onError={() => setShopLogoBroken(true)} className="h-full w-full object-cover" />
+                                                    ) : (
+                                                        <Store size={22} strokeWidth={1.4} className="text-stone-500" />
+                                                    )}
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <label className={`h-11 px-4 border border-stone-200 bg-stone-50 text-sm font-medium inline-flex items-center justify-center gap-2 ${isEditingShop ? 'cursor-pointer hover:bg-white' : 'opacity-60 cursor-not-allowed'}`}>
+                                                        <Upload size={15} /> {logoUploading ? 'Uploading...' : 'Upload Logo'}
+                                                        <input type="file" accept="image/png,image/jpeg,image/jpg,image/webp" onChange={uploadShopLogo} disabled={!isEditingShop || logoUploading || saving} className="sr-only" />
+                                                    </label>
+                                                    {logoError && <p className="mt-2 text-xs text-red-700">{logoError}</p>}
+                                                    {shopLogoUrl && <p className="mt-2 max-w-full truncate text-xs text-stone-500">{shopLogoUrl}</p>}
+                                                </div>
                                             </div>
+                                        </div>
+                                        <label className="block">
+                                            <span className="text-sm font-medium text-stone-700">Shop name</span>
+                                            <input disabled={!isEditingShop} value={shopName} onChange={(event) => setShopName(event.target.value)} className="mt-2 h-11 w-full border border-stone-200 bg-stone-50 px-3 outline-none disabled:text-stone-600 focus:border-stone-500" />
+                                        </label>
+                                        <label className="block">
+                                            <span className="text-sm font-medium text-stone-700">Studio bio</span>
+                                            <textarea disabled={!isEditingShop} rows={5} value={shopBio} onChange={(event) => setShopBio(event.target.value)} className="mt-2 w-full border border-stone-200 bg-stone-50 p-3 outline-none disabled:text-stone-600 focus:border-stone-500" />
+                                        </label>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <label className="block">
+                                                <span className="text-sm font-medium text-stone-700">Location</span>
+                                                <input disabled={!isEditingShop} value={shopCity} onChange={(event) => setShopCity(event.target.value)} className="mt-2 h-11 w-full border border-stone-200 bg-stone-50 px-3 outline-none disabled:text-stone-600 focus:border-stone-500" />
+                                            </label>
+                                            <label className="block">
+                                                <span className="text-sm font-medium text-stone-700">Daily capacity</span>
+                                                <input disabled={!isEditingShop} type="number" min="1" value={dailyCapacity} onChange={(event) => setDailyCapacity(event.target.value)} className="mt-2 h-11 w-full border border-stone-200 bg-stone-50 px-3 outline-none disabled:text-stone-600 focus:border-stone-500" />
+                                            </label>
+                                        </div>
+                                        {isEditingShop && (
+                                            <button onClick={saveShopProfile} disabled={saving} className="h-11 px-5 bg-stone-900 text-white text-sm font-semibold disabled:opacity-60">
+                                                {saving ? 'Saving...' : 'Save Shop Information'}
+                                            </button>
                                         )}
                                     </div>
-
-                                    {/* Avatar / Logo Section */}
-                                    <div className="md:w-64 space-y-6 md:border-l md:border-stone-100 md:pl-10">
-                                        <div className="space-y-4 text-center">
-                                            <div className="w-32 h-32 mx-auto bg-stone-50 rounded-full flex items-center justify-center text-4xl font-serif italic text-stone-700 border-2 border-dashed border-stone-200 relative group overflow-hidden">
-                                                <span>{initials}</span>
-                                                {isEditingShop && (
-                                                    <div className="absolute inset-0 bg-stone-900/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
-                                                        <span className="text-white text-xs uppercase tracking-widest font-medium">Upload</span>
-                                                    </div>
-                                                )}
-                                            </div>
-                                            <div>
-                                                <p className="text-sm font-medium text-stone-900">Studio Mark / Logo</p>
-                                                <p className="text-xs text-stone-500 mt-1 px-4 leading-relaxed">JPEG, PNG. Recommended 500x500px.</p>
-                                            </div>
+                                    <div className="border border-stone-200 p-5">
+                                        <div className="h-32 w-32 rounded-full mx-auto bg-stone-100 border border-stone-200 overflow-hidden flex items-center justify-center">
+                                            {shopLogoUrl && !shopLogoBroken ? (
+                                                <img src={mediaUrl(shopLogoUrl)} alt="" onError={() => setShopLogoBroken(true)} className="h-full w-full object-cover" />
+                                            ) : (
+                                                <Store size={34} strokeWidth={1.4} className="text-stone-500" />
+                                            )}
                                         </div>
+                                        <p className="mt-5 text-center font-medium">{shopName}</p>
+                                        <p className="mt-2 text-center text-sm text-stone-500">{shopCity}</p>
+                                        <p className="mt-1 text-center text-xs text-stone-400">{dailyCapacity} orders per day</p>
                                     </div>
                                 </div>
                             </div>
                         )}
 
-                    </div>
+                        {activeTab === 'settings' && (
+                            <div className="bg-white border border-stone-200 p-8 text-center">
+                                <Settings size={28} className="mx-auto text-stone-400" />
+                                <h2 className="mt-4 font-serif text-2xl">Seller Settings</h2>
+                                <p className="mt-2 text-sm text-stone-500">Delivery rules, payout details, and shop policies can plug in here next.</p>
+                            </div>
+                        )}
+                    </section>
                 </div>
             </main>
         </div>
