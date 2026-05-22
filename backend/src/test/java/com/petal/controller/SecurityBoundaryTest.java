@@ -3,6 +3,7 @@ package com.petal.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.petal.config.SecurityConfig;
 import com.petal.dto.CartResponse;
+import com.petal.dto.DeliveryAddressResponse;
 import com.petal.dto.FloristResponse;
 import com.petal.dto.SellerOrderResponse;
 import com.petal.entity.User;
@@ -11,6 +12,7 @@ import com.petal.repository.UserRepository;
 import com.petal.security.JwtFilter;
 import com.petal.security.JwtUtil;
 import com.petal.service.CartService;
+import com.petal.service.DeliveryAddressService;
 import com.petal.service.FloristService;
 import com.petal.service.OrderService;
 import org.junit.jupiter.api.Test;
@@ -32,15 +34,20 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest({
         AuthController.class,
         CartController.class,
+        DeliveryAddressController.class,
         FloristController.class,
         FloristProfileImageController.class,
+        OrderController.class,
+        UserAddressController.class,
         SellerOrderController.class
 })
 @Import({SecurityConfig.class, JwtFilter.class, GlobalExceptionHandler.class})
@@ -63,6 +70,9 @@ class SecurityBoundaryTest {
 
     @MockBean
     private CartService cartService;
+
+    @MockBean
+    private DeliveryAddressService deliveryAddressService;
 
     @MockBean
     private FloristService floristService;
@@ -105,13 +115,83 @@ class SecurityBoundaryTest {
     void floristLogoUploadWithBuyerTokenReturnsForbidden() throws Exception {
         User buyer = buyer();
         authenticateToken("buyer-token", buyer);
-        Mockito.when(floristService.uploadProfileImage(eq(buyer), any()))
-                .thenThrow(new com.petal.exception.ForbiddenException("Florist access is required"));
 
         mockMvc.perform(multipart("/api/florists/profile/image")
                         .file("file", "image-bytes".getBytes())
                         .header("Authorization", "Bearer buyer-token"))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void sddFloristProfileUpdateWithBuyerTokenReturnsForbidden() throws Exception {
+        authenticateToken("buyer-token", buyer());
+
+        mockMvc.perform(put("/api/florists/profile")
+                        .header("Authorization", "Bearer buyer-token")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "storeName", "Buyer Studio",
+                                "bio", "Nope",
+                                "city", "Cebu",
+                                "maxDailyCapacity", 4))))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void sddFloristOrdersWithBuyerTokenReturnsForbidden() throws Exception {
+        authenticateToken("buyer-token", buyer());
+
+        mockMvc.perform(get("/api/orders/florist")
+                        .header("Authorization", "Bearer buyer-token"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void sddOrderStatusPatchWithBuyerTokenReturnsForbidden() throws Exception {
+        authenticateToken("buyer-token", buyer());
+
+        mockMvc.perform(patch("/api/orders/12/status")
+                        .header("Authorization", "Bearer buyer-token")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("status", "ACCEPTED"))))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void sddUserAddressPostWithFloristTokenReturnsForbidden() throws Exception {
+        authenticateToken("florist-token", florist());
+
+        mockMvc.perform(post("/api/users/addresses")
+                        .header("Authorization", "Bearer florist-token")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "label", "Studio",
+                                "recipientName", "Mika",
+                                "phoneNumber", "09171234567",
+                                "addressLine", "Cebu",
+                                "defaultAddress", true))))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void sddUserAddressGetWithBuyerTokenReturnsAddresses() throws Exception {
+        User buyer = buyer();
+        authenticateToken("buyer-token", buyer);
+        Mockito.when(deliveryAddressService.getAddresses(buyer)).thenReturn(List.of(
+                DeliveryAddressResponse.builder()
+                        .id(5L)
+                        .label("Home")
+                        .recipientName("Mika Santos")
+                        .phoneNumber("09171234567")
+                        .addressLine("Cebu Business Park")
+                        .defaultAddress(true)
+                        .build()));
+
+        mockMvc.perform(get("/api/users/addresses")
+                        .header("Authorization", "Bearer buyer-token"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.data[0].recipientName", is("Mika Santos")));
     }
 
     @Test

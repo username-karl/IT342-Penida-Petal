@@ -29,11 +29,12 @@ import static org.hamcrest.Matchers.is;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@WebMvcTest(SellerOrderController.class)
+@WebMvcTest({SellerOrderController.class, FloristOrderAliasController.class})
 @AutoConfigureMockMvc(addFilters = false)
 class SellerOrderControllerTest {
 
@@ -82,6 +83,32 @@ class SellerOrderControllerTest {
     }
 
     @Test
+    void sddFloristOrdersAliasReturnsAuthenticatedFloristOrders() throws Exception {
+        User seller = authenticatedSeller();
+        Mockito.when(orderService.getSellerOrders(seller)).thenReturn(List.of(
+                SellerOrderResponse.builder()
+                        .id(12L)
+                        .orderNumber("PET-0012")
+                        .buyerName("Mikaela Santos")
+                        .recipientName("Lara Santos")
+                        .recipientAddress("Cebu Business Park")
+                        .deliveryDate(LocalDate.of(2026, 5, 18))
+                        .timeSlot("AM")
+                        .status("PENDING")
+                        .paymentMethod("GCASH")
+                        .sellerSubtotal(new BigDecimal("2950.00"))
+                        .itemSummary("Aurora Hydrangea x2")
+                        .build()));
+
+        mockMvc.perform(get("/api/orders/florist")
+                        .principal(SecurityContextHolder.getContext().getAuthentication()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.data", hasSize(1)))
+                .andExpect(jsonPath("$.data[0].orderNumber", is("PET-0012")));
+    }
+
+    @Test
     void updateSellerOrderStatusReturnsUpdatedOrder() throws Exception {
         User seller = authenticatedSeller();
         Mockito.when(orderService.updateSellerOrderStatus(eq(seller), eq(12L), any())).thenReturn(
@@ -94,6 +121,29 @@ class SellerOrderControllerTest {
                         .build());
 
         mockMvc.perform(put("/api/seller/orders/12/status")
+                        .principal(SecurityContextHolder.getContext().getAuthentication())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                java.util.Map.of("status", "ACCEPTED"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.data.orderNumber", is("PET-0012")))
+                .andExpect(jsonPath("$.data.status", is("ACCEPTED")));
+    }
+
+    @Test
+    void sddOrderStatusAliasPatchesSellerOrderStatus() throws Exception {
+        User seller = authenticatedSeller();
+        Mockito.when(orderService.updateSellerOrderStatus(eq(seller), eq(12L), any())).thenReturn(
+                SellerOrderResponse.builder()
+                        .id(12L)
+                        .orderNumber("PET-0012")
+                        .status("ACCEPTED")
+                        .paymentMethod("GCASH")
+                        .sellerSubtotal(new BigDecimal("2950.00"))
+                        .build());
+
+        mockMvc.perform(patch("/api/orders/12/status")
                         .principal(SecurityContextHolder.getContext().getAuthentication())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(

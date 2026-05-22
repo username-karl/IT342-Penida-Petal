@@ -25,12 +25,17 @@ public class DeliverySlotController {
     @GetMapping("/availability")
     public ResponseEntity<ApiResponse<DeliverySlotAvailabilityResponse>> getAvailability(
             @AuthenticationPrincipal User user,
-            @RequestParam("florist_id") Long floristId,
+            @RequestParam(value = "florist_id", required = false) Long floristId,
+            @RequestParam(value = "floristId", required = false) Long camelCaseFloristId,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
+        Long resolvedFloristId = floristId != null ? floristId : camelCaseFloristId;
+        if (resolvedFloristId == null) {
+            throw new IllegalArgumentException("Florist id is required");
+        }
         return ResponseEntity.ok(ApiResponse.<DeliverySlotAvailabilityResponse>builder()
                 .success(true)
                 .message("Delivery slot availability fetched successfully")
-                .data(deliverySlotAvailabilityService.getAvailability(user, floristId, date))
+                .data(deliverySlotAvailabilityService.getAvailability(user, resolvedFloristId, date))
                 .build());
     }
 }

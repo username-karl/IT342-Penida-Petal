@@ -30,7 +30,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@WebMvcTest(DeliveryAddressController.class)
+@WebMvcTest({DeliveryAddressController.class, UserAddressController.class})
 @AutoConfigureMockMvc(addFilters = false)
 class DeliveryAddressControllerTest {
 
@@ -76,6 +76,34 @@ class DeliveryAddressControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.message", is("Address saved successfully")))
                 .andExpect(jsonPath("$.data.label", is("Home")));
+    }
+
+    @Test
+    void sddUserAddressAliasCreatesAddressForCurrentUser() throws Exception {
+        User user = authenticatedUser();
+        DeliveryAddressRequest request = addressRequest();
+        Mockito.when(deliveryAddressService.createAddress(eq(user), eq(request))).thenReturn(addressResponse());
+
+        mockMvc.perform(post("/api/users/addresses")
+                        .principal(SecurityContextHolder.getContext().getAuthentication())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message", is("Address saved successfully")))
+                .andExpect(jsonPath("$.data.label", is("Home")));
+    }
+
+    @Test
+    void sddUserAddressAliasGetsCurrentUsersAddresses() throws Exception {
+        User user = authenticatedUser();
+        Mockito.when(deliveryAddressService.getAddresses(user)).thenReturn(List.of(addressResponse()));
+
+        mockMvc.perform(get("/api/users/addresses")
+                        .principal(SecurityContextHolder.getContext().getAuthentication()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.data", hasSize(1)))
+                .andExpect(jsonPath("$.data[0].recipientName", is("Mika Santos")));
     }
 
     @Test

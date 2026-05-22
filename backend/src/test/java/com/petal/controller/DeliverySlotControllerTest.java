@@ -69,6 +69,27 @@ class DeliverySlotControllerTest {
     }
 
     @Test
+    void getAvailabilityAlsoAcceptsCamelCaseFloristId() throws Exception {
+        User buyer = authenticatedBuyer();
+        LocalDate deliveryDate = LocalDate.now().plusDays(2);
+
+        Mockito.when(deliverySlotAvailabilityService.getAvailability(eq(buyer), eq(9L), eq(deliveryDate)))
+                .thenReturn(DeliverySlotAvailabilityResponse.builder()
+                        .date(deliveryDate)
+                        .am(DeliverySlotResponse.builder().available(true).remaining(3).build())
+                        .pm(DeliverySlotResponse.builder().available(false).remaining(0).build())
+                        .build());
+
+        mockMvc.perform(get("/api/slots/availability")
+                        .param("floristId", "9")
+                        .param("date", deliveryDate.toString())
+                        .principal(SecurityContextHolder.getContext().getAuthentication()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.data.date", is(deliveryDate.toString())));
+    }
+
+    @Test
     void getAvailabilityReturnsForbiddenForNonBuyerUsers() throws Exception {
         User florist = authenticatedFlorist();
         LocalDate deliveryDate = LocalDate.now().plusDays(2);

@@ -109,6 +109,42 @@ class FloristControllerTest {
     }
 
     @Test
+    void sddFloristProfileAliasUpdatesSellerProfile() throws Exception {
+        User seller = authenticatedSeller();
+        Mockito.when(floristService.updateCurrentFlorist(eq(seller), any())).thenReturn(FloristResponse.builder()
+                .id(12L)
+                .userId(4L)
+                .storeName("Cebu Florist Studio")
+                .bio("Morning delivery arrangements.")
+                .city("Cebu City")
+                .maxDailyCapacity(18)
+                .deliveryCoverage("Cebu City, Mandaue")
+                .timeSlots("AM,PM")
+                .prepLeadTimeHours(18)
+                .onboardingComplete(true)
+                .build());
+
+        mockMvc.perform(put("/api/florists/profile")
+                        .principal(SecurityContextHolder.getContext().getAuthentication())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "storeName": "Cebu Florist Studio",
+                                  "bio": "Morning delivery arrangements.",
+                                  "city": "Cebu City",
+                                  "maxDailyCapacity": 18,
+                                  "deliveryCoverage": "Cebu City, Mandaue",
+                                  "timeSlots": "AM,PM",
+                                  "prepLeadTimeHours": 18,
+                                  "onboardingComplete": true
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.data.city", is("Cebu City")));
+    }
+
+    @Test
     void uploadProfileImageUsesMultipartFileField() throws Exception {
         User seller = authenticatedSeller();
         MockMultipartFile file = new MockMultipartFile("file", "logo.png", "image/png", "image-bytes".getBytes());
