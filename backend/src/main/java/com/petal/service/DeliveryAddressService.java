@@ -4,6 +4,7 @@ import com.petal.dto.DeliveryAddressRequest;
 import com.petal.dto.DeliveryAddressResponse;
 import com.petal.entity.DeliveryAddress;
 import com.petal.entity.User;
+import com.petal.exception.ForbiddenException;
 import com.petal.repository.DeliveryAddressRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -18,6 +19,7 @@ public class DeliveryAddressService {
     private final DeliveryAddressRepository deliveryAddressRepository;
 
     public List<DeliveryAddressResponse> getAddresses(User user) {
+        requireBuyer(user);
         return deliveryAddressRepository.findByUserOrderByDefaultAddressDescIdAsc(user).stream()
                 .map(this::toResponse)
                 .toList();
@@ -25,6 +27,7 @@ public class DeliveryAddressService {
 
     @Transactional
     public DeliveryAddressResponse createAddress(User user, DeliveryAddressRequest request) {
+        requireBuyer(user);
         if (request.isDefaultAddress()) {
             deliveryAddressRepository.clearDefaultAddressForUser(user);
         }
@@ -43,8 +46,9 @@ public class DeliveryAddressService {
 
     @Transactional
     public DeliveryAddressResponse updateAddress(User user, Long id, DeliveryAddressRequest request) {
+        requireBuyer(user);
         DeliveryAddress address = deliveryAddressRepository.findByIdAndUser(id, user)
-                .orElseThrow(() -> new IllegalArgumentException("Address not found"));
+                .orElseThrow(() -> new ForbiddenException("Address not found"));
 
         if (request.isDefaultAddress()) {
             deliveryAddressRepository.clearDefaultAddressForUser(user);
@@ -61,9 +65,16 @@ public class DeliveryAddressService {
 
     @Transactional
     public void deleteAddress(User user, Long id) {
+        requireBuyer(user);
         DeliveryAddress address = deliveryAddressRepository.findByIdAndUser(id, user)
-                .orElseThrow(() -> new IllegalArgumentException("Address not found"));
+                .orElseThrow(() -> new ForbiddenException("Address not found"));
         deliveryAddressRepository.delete(address);
+    }
+
+    private void requireBuyer(User user) {
+        if (user == null || !"ROLE_BUYER".equals(user.getRole())) {
+            throw new ForbiddenException("Buyer access is required");
+        }
     }
 
     private DeliveryAddressResponse toResponse(DeliveryAddress address) {

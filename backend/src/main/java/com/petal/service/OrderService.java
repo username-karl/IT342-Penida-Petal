@@ -17,6 +17,7 @@ import com.petal.entity.OrderItem;
 import com.petal.entity.Product;
 import com.petal.entity.TrackingEvent;
 import com.petal.entity.User;
+import com.petal.exception.ForbiddenException;
 import com.petal.repository.CartItemRepository;
 import com.petal.repository.OrderRepository;
 import lombok.RequiredArgsConstructor;
@@ -65,6 +66,7 @@ public class OrderService {
 
     @Transactional
     public OrderResponse createOrder(User user, CreateOrderRequest request) {
+        requireBuyer(user);
         List<CartItem> cartItems = cartItemRepository.findByUserOrderByIdAsc(user);
         if (cartItems.isEmpty()) {
             throw new IllegalArgumentException("Cart is empty");
@@ -121,6 +123,7 @@ public class OrderService {
 
     @Transactional(readOnly = true)
     public List<BuyerOrderResponse> getBuyerOrders(User user) {
+        requireBuyer(user);
         return orderRepository.findByUserOrderByDeliveryDateDescIdDesc(user)
                 .stream()
                 .map(this::toBuyerOrderResponse)
@@ -129,8 +132,14 @@ public class OrderService {
 
     @Transactional(readOnly = true)
     public BuyerOrderResponse getBuyerOrder(User user, Long orderId) {
+        requireBuyer(user);
         Order order = orderRepository.findByIdAndUser(orderId, user)
-                .orElseThrow(() -> new IllegalArgumentException("Order not found"));
+                .orElseGet(() -> {
+                    if (orderRepository.findById(orderId).isPresent()) {
+                        throw new ForbiddenException("Order not found");
+                    }
+                    throw new IllegalArgumentException("Order not found");
+                });
         return toBuyerOrderResponse(order);
     }
 
@@ -147,10 +156,10 @@ public class OrderService {
     public SellerOrderResponse getSellerOrder(User seller, Long orderId) {
         Florist florist = floristService.getOrCreateForUser(seller);
         Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new IllegalArgumentException("Order not found for this seller"));
+                .orElseThrow(() -> new IllegalArgumentException("Order not found"));
 
         if (!hasSellerItems(order, florist.getId())) {
-            throw new IllegalArgumentException("Order not found for this seller");
+            throw new ForbiddenException("Order not found for this seller");
         }
 
         return toSellerOrderResponse(order, florist.getId());
@@ -164,10 +173,10 @@ public class OrderService {
         Florist florist = floristService.getOrCreateForUser(seller);
         String status = normalizeStatus(request.getStatus());
         Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new IllegalArgumentException("Order not found for this seller"));
+                .orElseThrow(() -> new IllegalArgumentException("Order not found"));
 
         if (!hasSellerItems(order, florist.getId())) {
-            throw new IllegalArgumentException("Order not found for this seller");
+            throw new ForbiddenException("Order not found for this seller");
         }
 
         ensureSingleSellerOrder(order, florist.getId());
@@ -423,7 +432,13 @@ public class OrderService {
         boolean hasOtherSellerItems = order.getItems().stream()
                 .anyMatch(item -> !floristId.equals(item.getProduct().getFloristId()));
         if (hasOtherSellerItems) {
-            throw new IllegalArgumentException("Order cannot be updated from seller view");
+            throw new ForbiddenException("Order cannot be updated from seller view");
+        }
+    }
+
+    private void requireBuyer(User user) {
+        if (user == null || !"ROLE_BUYER".equals(user.getRole())) {
+            throw new ForbiddenException("Buyer access is required");
         }
     }
 

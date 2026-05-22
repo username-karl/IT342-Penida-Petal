@@ -4,6 +4,7 @@ import com.petal.dto.SavedDateRequest;
 import com.petal.dto.SavedDateResponse;
 import com.petal.entity.SavedDate;
 import com.petal.entity.User;
+import com.petal.exception.ForbiddenException;
 import com.petal.repository.SavedDateRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -71,14 +72,14 @@ class SavedDateServiceTest {
     @Test
     void floristCannotCreateSavedDate() {
         assertThatThrownBy(() -> savedDateService.createSavedDate(florist(), request("Anniversary", LocalDate.now().plusDays(5), false)))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(ForbiddenException.class)
                 .hasMessage("Buyer access is required");
     }
 
     @Test
     void floristCannotListSavedDates() {
         assertThatThrownBy(() -> savedDateService.getSavedDates(florist()))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(ForbiddenException.class)
                 .hasMessage("Buyer access is required");
     }
 

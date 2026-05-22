@@ -42,9 +42,13 @@ public class AuthController {
                 // Map role
                 String userRole = "ROLE_BUYER"; // Default
                 if (request.getRole() != null) {
-                        if (request.getRole().equalsIgnoreCase("artisan")) {
+                        if (request.getRole().equalsIgnoreCase("artisan")
+                                        || request.getRole().equalsIgnoreCase("florist")
+                                        || request.getRole().equalsIgnoreCase("ROLE_FLORIST")) {
                                 userRole = "ROLE_FLORIST";
-                        } else if (request.getRole().equalsIgnoreCase("customer")) {
+                        } else if (request.getRole().equalsIgnoreCase("customer")
+                                        || request.getRole().equalsIgnoreCase("buyer")
+                                        || request.getRole().equalsIgnoreCase("ROLE_BUYER")) {
                                 userRole = "ROLE_BUYER";
                         }
                 }

@@ -5,6 +5,7 @@ import com.petal.dto.ProductResponse;
 import com.petal.entity.Florist;
 import com.petal.entity.Product;
 import com.petal.entity.User;
+import com.petal.exception.ForbiddenException;
 import com.petal.repository.ProductRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -113,13 +114,13 @@ public class ProductService {
 
     private void requireFlorist(User user) {
         if (user == null || !"ROLE_FLORIST".equals(user.getRole())) {
-            throw new IllegalArgumentException("Florist access is required");
+            throw new ForbiddenException("Florist access is required");
         }
     }
 
     private void requireProductOwner(Florist florist, Product product) {
         if (!florist.getId().equals(product.getFloristId())) {
-            throw new IllegalArgumentException("You can only manage your own products");
+            throw new ForbiddenException("You can only manage your own products");
         }
     }
 

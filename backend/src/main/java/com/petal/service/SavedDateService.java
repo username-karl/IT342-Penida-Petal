@@ -4,6 +4,7 @@ import com.petal.dto.SavedDateRequest;
 import com.petal.dto.SavedDateResponse;
 import com.petal.entity.SavedDate;
 import com.petal.entity.User;
+import com.petal.exception.ForbiddenException;
 import com.petal.repository.SavedDateRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -52,7 +53,7 @@ public class SavedDateService {
 
     private void requireBuyer(User user) {
         if (user == null || !"ROLE_BUYER".equals(user.getRole())) {
-            throw new IllegalArgumentException("Buyer access is required");
+            throw new ForbiddenException("Buyer access is required");
         }
     }
 

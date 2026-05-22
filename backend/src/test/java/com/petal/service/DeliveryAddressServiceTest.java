@@ -4,6 +4,7 @@ import com.petal.dto.DeliveryAddressRequest;
 import com.petal.dto.DeliveryAddressResponse;
 import com.petal.entity.DeliveryAddress;
 import com.petal.entity.User;
+import com.petal.exception.ForbiddenException;
 import com.petal.repository.DeliveryAddressRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -61,7 +62,7 @@ class DeliveryAddressServiceTest {
         Mockito.when(deliveryAddressRepository.findByIdAndUser(12L, user)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> deliveryAddressService.updateAddress(user, 12L, request(false)))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(ForbiddenException.class)
                 .hasMessage("Address not found");
     }
 
@@ -71,7 +72,7 @@ class DeliveryAddressServiceTest {
         Mockito.when(deliveryAddressRepository.findByIdAndUser(12L, user)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> deliveryAddressService.deleteAddress(user, 12L))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(ForbiddenException.class)
                 .hasMessage("Address not found");
     }
 

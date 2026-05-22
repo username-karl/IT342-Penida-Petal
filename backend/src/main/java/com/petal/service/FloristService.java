@@ -4,6 +4,7 @@ import com.petal.dto.FloristRequest;
 import com.petal.dto.FloristResponse;
 import com.petal.entity.Florist;
 import com.petal.entity.User;
+import com.petal.exception.ForbiddenException;
 import com.petal.repository.FloristRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -105,7 +106,7 @@ public class FloristService {
 
     private void requireFloristUser(User user) {
         if (user == null || !"ROLE_FLORIST".equals(user.getRole())) {
-            throw new IllegalArgumentException("Florist access is required");
+            throw new ForbiddenException("Florist access is required");
         }
     }
 

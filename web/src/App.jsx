@@ -20,6 +20,9 @@ import SellerOrderDetail from './pages/SellerOrderDetail';
 import SellerOnboarding from './pages/SellerOnboarding';
 import './index.css';
 
+const BUYER_ROLES = ['BUYER'];
+const SELLER_ROLES = ['FLORIST'];
+
 export default function App() {
     return (
         <Router>
@@ -38,7 +41,7 @@ export default function App() {
                     <Route
                         path="/profile"
                         element={
-                            <ProtectedRoute>
+                            <ProtectedRoute roles={BUYER_ROLES}>
                                 <Profile />
                             </ProtectedRoute>
                         }
@@ -46,7 +49,7 @@ export default function App() {
                     <Route
                         path="/purchase-history"
                         element={
-                            <ProtectedRoute>
+                            <ProtectedRoute roles={BUYER_ROLES}>
                                 <PurchaseHistory />
                             </ProtectedRoute>
                         }
@@ -54,7 +57,7 @@ export default function App() {
                     <Route
                         path="/orders/:id"
                         element={
-                            <ProtectedRoute>
+                            <ProtectedRoute roles={BUYER_ROLES}>
                                 <OrderDetail />
                             </ProtectedRoute>
                         }
@@ -62,7 +65,7 @@ export default function App() {
                     <Route
                         path="/orders/:id/shipping"
                         element={
-                            <ProtectedRoute>
+                            <ProtectedRoute roles={BUYER_ROLES}>
                                 <ShippingInformation />
                             </ProtectedRoute>
                         }
@@ -70,7 +73,7 @@ export default function App() {
                     <Route
                         path="/browse"
                         element={
-                            <ProtectedRoute>
+                            <ProtectedRoute roles={BUYER_ROLES}>
                                 <Browse />
                             </ProtectedRoute>
                         }
@@ -78,7 +81,7 @@ export default function App() {
                     <Route
                         path="/cart"
                         element={
-                            <ProtectedRoute>
+                            <ProtectedRoute roles={BUYER_ROLES}>
                                 <Cart />
                             </ProtectedRoute>
                         }
@@ -86,7 +89,7 @@ export default function App() {
                     <Route
                         path="/checkout"
                         element={
-                            <ProtectedRoute>
+                            <ProtectedRoute roles={BUYER_ROLES}>
                                 <Checkout />
                             </ProtectedRoute>
                         }
@@ -94,7 +97,7 @@ export default function App() {
                     <Route
                         path="/checkout/confirmation"
                         element={
-                            <ProtectedRoute>
+                            <ProtectedRoute roles={BUYER_ROLES}>
                                 <CheckoutConfirmation />
                             </ProtectedRoute>
                         }
@@ -102,7 +105,7 @@ export default function App() {
                     <Route
                         path="/products/:id"
                         element={
-                            <ProtectedRoute>
+                            <ProtectedRoute roles={BUYER_ROLES}>
                                 <ProductDetail />
                             </ProtectedRoute>
                         }
@@ -110,7 +113,7 @@ export default function App() {
                     <Route
                         path="/shop-by-mood"
                         element={
-                            <ProtectedRoute>
+                            <ProtectedRoute roles={BUYER_ROLES}>
                                 <ShopByMood />
                             </ProtectedRoute>
                         }
@@ -118,7 +121,7 @@ export default function App() {
                     <Route
                         path="/seller-education"
                         element={
-                            <ProtectedRoute>
+                            <ProtectedRoute roles={SELLER_ROLES}>
                                 <SellerEducation />
                             </ProtectedRoute>
                         }
@@ -126,7 +129,7 @@ export default function App() {
                     <Route
                         path="/seller-centre"
                         element={
-                            <ProtectedRoute>
+                            <ProtectedRoute roles={SELLER_ROLES}>
                                 <SellerCentre />
                             </ProtectedRoute>
                         }
@@ -134,7 +137,7 @@ export default function App() {
                     <Route
                         path="/seller-orders/:id"
                         element={
-                            <ProtectedRoute>
+                            <ProtectedRoute roles={SELLER_ROLES}>
                                 <SellerOrderDetail />
                             </ProtectedRoute>
                         }
@@ -142,7 +145,7 @@ export default function App() {
                     <Route
                         path="/seller-onboarding"
                         element={
-                            <ProtectedRoute>
+                            <ProtectedRoute roles={SELLER_ROLES}>
                                 <SellerOnboarding />
                             </ProtectedRoute>
                         }

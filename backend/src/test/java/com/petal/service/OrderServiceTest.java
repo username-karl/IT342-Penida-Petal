@@ -12,6 +12,7 @@ import com.petal.entity.OrderItem;
 import com.petal.entity.Product;
 import com.petal.entity.TrackingEvent;
 import com.petal.entity.User;
+import com.petal.exception.ForbiddenException;
 import com.petal.repository.CartItemRepository;
 import com.petal.repository.OrderRepository;
 import org.junit.jupiter.api.Test;
@@ -194,9 +195,13 @@ class OrderServiceTest {
 
         Mockito.when(orderRepository.findByIdAndUser(25L, buyer))
                 .thenReturn(Optional.empty());
+        Mockito.when(orderRepository.findById(25L))
+                .thenReturn(Optional.of(orderWithItems(
+                        User.builder().id(99L).name("Other Buyer").role("ROLE_BUYER").build(),
+                        "PENDING")));
 
         assertThatThrownBy(() -> orderService.getBuyerOrder(buyer, 25L))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(ForbiddenException.class)
                 .hasMessage("Order not found");
     }
 
@@ -331,7 +336,7 @@ class OrderServiceTest {
                 seller,
                 25L,
                 SellerOrderStatusRequest.builder().status("ACCEPTED").build()))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(ForbiddenException.class)
                 .hasMessage("Order not found for this seller");
     }
 
@@ -408,7 +413,7 @@ class OrderServiceTest {
                 seller,
                 25L,
                 SellerOrderStatusRequest.builder().status("ACCEPTED").build()))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(ForbiddenException.class)
                 .hasMessage("Order cannot be updated from seller view");
         Mockito.verify(orderRepository, Mockito.never()).save(Mockito.any(Order.class));
     }
@@ -542,7 +547,7 @@ class OrderServiceTest {
                         .deliveryStatus("OUT_FOR_DELIVERY")
                         .timestamp(LocalDateTime.of(2026, 5, 19, 12, 10))
                         .build()))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(ForbiddenException.class)
                 .hasMessage("Order cannot be updated from seller view");
         Mockito.verify(orderRepository, Mockito.never()).save(Mockito.any(Order.class));
     }
