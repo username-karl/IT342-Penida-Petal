@@ -7,10 +7,12 @@ import com.petal.entity.Product;
 import com.petal.entity.User;
 import com.petal.exception.ForbiddenException;
 import com.petal.repository.ProductRepository;
+import com.petal.repository.FloristRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -18,6 +20,7 @@ public class ProductService {
 
     private final ProductRepository productRepository;
     private final FloristService floristService;
+    private final FloristRepository floristRepository;
 
     public List<ProductResponse> getProducts(String mood) {
         List<Product> products = mood == null || mood.isBlank()
@@ -98,6 +101,10 @@ public class ProductService {
     }
 
     public ProductResponse toResponse(Product product) {
+        Optional<Florist> florist = product.getFloristId() == null
+                ? Optional.empty()
+                : floristRepository.findById(product.getFloristId());
+
         return ProductResponse.builder()
                 .id(product.getId())
                 .name(product.getName())
@@ -106,8 +113,9 @@ public class ProductService {
                 .moodTags(product.getMoodTags())
                 .imageUrl(product.getImageUrl())
                 .floristId(product.getFloristId())
-                .floristName(product.getFloristName())
-                .floristLogoUrl(product.getFloristLogoUrl())
+                .floristName(florist.map(this::resolveFloristName).orElse(product.getFloristName()))
+                .floristLogoUrl(florist.map(Florist::getLogoUrl).orElse(product.getFloristLogoUrl()))
+                .floristBio(florist.map(Florist::getBio).orElse(null))
                 .inStock(product.isInStock())
                 .build();
     }
@@ -136,6 +144,13 @@ public class ProductService {
         if (requestedName != null && !requestedName.isBlank()) {
             return requestedName.trim();
         }
+        if (florist.getStoreName() != null && !florist.getStoreName().isBlank()) {
+            return florist.getStoreName();
+        }
+        return "Local Petal Florist";
+    }
+
+    private String resolveFloristName(Florist florist) {
         if (florist.getStoreName() != null && !florist.getStoreName().isBlank()) {
             return florist.getStoreName();
         }

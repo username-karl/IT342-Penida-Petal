@@ -31,6 +31,7 @@ import static org.hamcrest.Matchers.is;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -39,6 +40,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         AuthController.class,
         CartController.class,
         FloristController.class,
+        FloristProfileImageController.class,
         SellerOrderController.class
 })
 @Import({SecurityConfig.class, JwtFilter.class, GlobalExceptionHandler.class})
@@ -88,6 +90,26 @@ class SecurityBoundaryTest {
         authenticateToken("buyer-token", buyer());
 
         mockMvc.perform(get("/api/seller/florist")
+                        .header("Authorization", "Bearer buyer-token"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void floristLogoUploadWithoutTokenReturnsUnauthorized() throws Exception {
+        mockMvc.perform(multipart("/api/florists/profile/image")
+                        .file("file", "image-bytes".getBytes()))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void floristLogoUploadWithBuyerTokenReturnsForbidden() throws Exception {
+        User buyer = buyer();
+        authenticateToken("buyer-token", buyer);
+        Mockito.when(floristService.uploadProfileImage(eq(buyer), any()))
+                .thenThrow(new com.petal.exception.ForbiddenException("Florist access is required"));
+
+        mockMvc.perform(multipart("/api/florists/profile/image")
+                        .file("file", "image-bytes".getBytes())
                         .header("Authorization", "Bearer buyer-token"))
                 .andExpect(status().isForbidden());
     }

@@ -36,6 +36,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/uploads/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/florists/profile/image").authenticated()
                         .requestMatchers("/api/seller/**").hasRole("FLORIST")
                         .requestMatchers(HttpMethod.POST, "/api/orders/*/fulfillment-photo").hasRole("FLORIST")
                         .requestMatchers(HttpMethod.POST, "/api/orders/*/proof").hasRole("FLORIST")

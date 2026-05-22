@@ -18,13 +18,24 @@ public class OrderImageStorageService {
     private static final Set<String> ALLOWED_CONTENT_TYPES = Set.of("image/png", "image/jpeg", "image/jpg", "image/webp");
     private static final long MAX_BYTES = 5L * 1024L * 1024L;
 
-    private final Path uploadRoot;
+    private final Path orderPhotoRoot;
+    private final Path floristLogoRoot;
 
     public OrderImageStorageService(@Value("${petal.upload-dir:uploads}") String uploadDir) {
-        this.uploadRoot = Path.of(uploadDir).toAbsolutePath().normalize().resolve("order-photos");
+        Path uploadRoot = Path.of(uploadDir).toAbsolutePath().normalize();
+        this.orderPhotoRoot = uploadRoot.resolve("order-photos");
+        this.floristLogoRoot = uploadRoot.resolve("florist-logos");
     }
 
     public String store(MultipartFile file, String prefix) {
+        return store(file, prefix, orderPhotoRoot, "/uploads/order-photos/", "order photo");
+    }
+
+    public String storeFloristLogo(MultipartFile file) {
+        return store(file, "logo", floristLogoRoot, "/uploads/florist-logos/", "florist logo");
+    }
+
+    private String store(MultipartFile file, String prefix, Path uploadRoot, String publicPath, String uploadLabel) {
         validate(file);
         try {
             Files.createDirectories(uploadRoot);
@@ -36,9 +47,9 @@ public class OrderImageStorageService {
                 throw new IllegalArgumentException("Invalid upload path");
             }
             file.transferTo(destination);
-            return "/uploads/order-photos/" + filename;
+            return publicPath + filename;
         } catch (IOException ex) {
-            throw new IllegalStateException("Unable to store order photo", ex);
+            throw new IllegalStateException("Unable to store " + uploadLabel, ex);
         }
     }
 

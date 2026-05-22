@@ -58,6 +58,8 @@ class ProductControllerTest {
                         .moodTags(List.of("romance", "celebration"))
                         .imageUrl("/images/rose-reverie.webp")
                         .floristName("Petal House")
+                        .floristLogoUrl("/uploads/florist-logos/petal-house.png")
+                        .floristBio("Thoughtful Cebu arrangements.")
                         .inStock(true)
                         .build(),
                 ProductResponse.builder()
@@ -76,6 +78,8 @@ class ProductControllerTest {
                 .andExpect(jsonPath("$.success", is(true)))
                 .andExpect(jsonPath("$.data", hasSize(2)))
                 .andExpect(jsonPath("$.data[0].name", is("Rose Reverie")))
+                .andExpect(jsonPath("$.data[0].floristLogoUrl", is("/uploads/florist-logos/petal-house.png")))
+                .andExpect(jsonPath("$.data[0].floristBio", is("Thoughtful Cebu arrangements.")))
                 .andExpect(jsonPath("$.data[1].moodTags[0]", is("apology")));
     }
 

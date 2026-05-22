@@ -1,6 +1,14 @@
 import axios from 'axios';
 
 const API_BASE_URL = 'http://localhost:8080/api';
+const API_ORIGIN = API_BASE_URL.replace(/\/api\/?$/, '');
+
+export function mediaUrl(value) {
+    if (!value) return '';
+    if (/^https?:\/\//i.test(value) || value.startsWith('data:')) return value;
+    if (value.startsWith('/uploads/')) return `${API_ORIGIN}${value}`;
+    return value;
+}
 
 const api = axios.create({
     baseURL: API_BASE_URL,
@@ -52,6 +60,13 @@ export const productsAPI = {
 export const floristAPI = {
     getProfile: () => api.get('/seller/florist'),
     updateProfile: (data) => api.put('/seller/florist', data),
+    uploadProfileImage: (file) => {
+        const formData = new FormData();
+        formData.append('file', file);
+        return api.post('/florists/profile/image', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+        });
+    },
 };
 
 export const cartAPI = {

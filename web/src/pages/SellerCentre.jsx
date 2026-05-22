@@ -18,12 +18,13 @@ import {
     Settings,
     Store,
     Truck,
+    Upload,
     Wallet,
     X,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import Grainient from '../components/Grainient';
-import { floristAPI, ordersAPI, productsAPI } from '../services/api';
+import { floristAPI, mediaUrl, ordersAPI, productsAPI } from '../services/api';
 
 const moodOptions = ['romance', 'celebration', 'sympathy', 'apology', 'calm', 'gratitude', 'wildflower'];
 
@@ -177,6 +178,10 @@ export default function SellerCentre() {
     const [shopName, setShopName] = useState(user?.name ? `${user.name}'s Studio` : 'My Floral Studio');
     const [shopBio, setShopBio] = useState('Locally composed preserved floral pieces for thoughtful Cebu gifting, prepared with careful wrapping and delivery-ready notes.');
     const [shopCity, setShopCity] = useState('Cebu, Philippines');
+    const [shopLogoUrl, setShopLogoUrl] = useState('');
+    const [shopLogoBroken, setShopLogoBroken] = useState(false);
+    const [logoUploading, setLogoUploading] = useState(false);
+    const [logoError, setLogoError] = useState('');
     const [dailyCapacity, setDailyCapacity] = useState(12);
     const [updatingOrderId, setUpdatingOrderId] = useState(null);
 
@@ -204,6 +209,8 @@ export default function SellerCentre() {
                 setShopName(florist.storeName || (user?.name ? `${user.name}'s Studio` : 'My Floral Studio'));
                 setShopBio(florist.bio || 'Locally composed preserved floral pieces for thoughtful Cebu gifting, prepared with careful wrapping and delivery-ready notes.');
                 setShopCity(florist.city || 'Cebu, Philippines');
+                setShopLogoUrl(florist.logoUrl || '');
+                setShopLogoBroken(false);
                 setDailyCapacity(florist.maxDailyCapacity || 12);
             } catch (err) {
                 setError(apiErrorMessage(err, 'Unable to load seller data'));
@@ -249,7 +256,7 @@ export default function SellerCentre() {
     };
 
     const resetForm = () => {
-        setFormData({ ...blankListing, floristName: shopName });
+        setFormData({ ...blankListing, floristName: shopName, floristLogoUrl: shopLogoUrl });
         setEditingProduct(null);
     };
 
@@ -262,7 +269,7 @@ export default function SellerCentre() {
             moodTags: product.moodTags?.length ? product.moodTags : ['celebration'],
             imageUrl: product.imageUrl || blankListing.imageUrl,
             floristName: product.floristName || shopName,
-            floristLogoUrl: product.floristLogoUrl || '',
+            floristLogoUrl: product.floristLogoUrl || shopLogoUrl,
             inStock: product.inStock,
         });
         setActiveTab('newProduct');
@@ -292,6 +299,7 @@ export default function SellerCentre() {
             ...formData,
             price: Number(formData.price),
             floristName: formData.floristName || shopName,
+            floristLogoUrl: formData.floristLogoUrl || shopLogoUrl,
         };
 
         try {
@@ -324,7 +332,7 @@ export default function SellerCentre() {
             moodTags: product.moodTags,
             imageUrl: product.imageUrl,
             floristName: product.floristName,
-            floristLogoUrl: product.floristLogoUrl,
+            floristLogoUrl: product.floristLogoUrl || shopLogoUrl,
             inStock: !product.inStock,
         };
 
@@ -357,12 +365,15 @@ export default function SellerCentre() {
                 storeName: shopName,
                 bio: shopBio,
                 city: shopCity,
+                logoUrl: shopLogoUrl,
                 maxDailyCapacity: Number(dailyCapacity),
             });
             const florist = response.data.data;
             setShopName(florist.storeName || shopName);
             setShopBio(florist.bio || shopBio);
             setShopCity(florist.city || shopCity);
+            setShopLogoUrl(florist.logoUrl || shopLogoUrl);
+            setShopLogoBroken(false);
             setDailyCapacity(florist.maxDailyCapacity || dailyCapacity);
             setIsEditingShop(false);
             setNotice('Shop profile saved.');
@@ -370,6 +381,30 @@ export default function SellerCentre() {
             setError(apiErrorMessage(err, 'Unable to save shop profile'));
         } finally {
             setSaving(false);
+        }
+    };
+
+    const uploadShopLogo = async (event) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        setLogoUploading(true);
+        setLogoError('');
+        setError('');
+        setNotice('');
+        try {
+            const response = await floristAPI.uploadProfileImage(file);
+            const logoUrl = response.data.data?.logoUrl || '';
+            setShopLogoUrl(logoUrl);
+            setShopLogoBroken(false);
+            setProducts((current) => current.map((product) => ({ ...product, floristLogoUrl: logoUrl })));
+            setFormData((current) => ({ ...current, floristLogoUrl: logoUrl }));
+            setNotice('Shop logo uploaded.');
+        } catch (err) {
+            setLogoError(apiErrorMessage(err, 'Unable to upload shop logo'));
+        } finally {
+            setLogoUploading(false);
+            event.target.value = '';
         }
     };
 
@@ -832,6 +867,26 @@ export default function SellerCentre() {
 
                                 <div className="mt-6 grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-8">
                                     <div className="space-y-5">
+                                        <div>
+                                            <span className="text-sm font-medium text-stone-700">Store logo</span>
+                                            <div className="mt-2 flex flex-col sm:flex-row sm:items-center gap-3">
+                                                <div className="h-16 w-16 shrink-0 overflow-hidden rounded-full border border-stone-200 bg-stone-100 flex items-center justify-center">
+                                                    {shopLogoUrl && !shopLogoBroken ? (
+                                                        <img src={mediaUrl(shopLogoUrl)} alt="" onError={() => setShopLogoBroken(true)} className="h-full w-full object-cover" />
+                                                    ) : (
+                                                        <Store size={22} strokeWidth={1.4} className="text-stone-500" />
+                                                    )}
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <label className={`h-11 px-4 border border-stone-200 bg-stone-50 text-sm font-medium inline-flex items-center justify-center gap-2 ${isEditingShop ? 'cursor-pointer hover:bg-white' : 'opacity-60 cursor-not-allowed'}`}>
+                                                        <Upload size={15} /> {logoUploading ? 'Uploading...' : 'Upload Logo'}
+                                                        <input type="file" accept="image/png,image/jpeg,image/jpg,image/webp" onChange={uploadShopLogo} disabled={!isEditingShop || logoUploading || saving} className="sr-only" />
+                                                    </label>
+                                                    {logoError && <p className="mt-2 text-xs text-red-700">{logoError}</p>}
+                                                    {shopLogoUrl && <p className="mt-2 max-w-full truncate text-xs text-stone-500">{shopLogoUrl}</p>}
+                                                </div>
+                                            </div>
+                                        </div>
                                         <label className="block">
                                             <span className="text-sm font-medium text-stone-700">Shop name</span>
                                             <input disabled={!isEditingShop} value={shopName} onChange={(event) => setShopName(event.target.value)} className="mt-2 h-11 w-full border border-stone-200 bg-stone-50 px-3 outline-none disabled:text-stone-600 focus:border-stone-500" />
@@ -857,8 +912,12 @@ export default function SellerCentre() {
                                         )}
                                     </div>
                                     <div className="border border-stone-200 p-5">
-                                        <div className="h-32 w-32 rounded-full mx-auto bg-stone-100 border border-stone-200 flex items-center justify-center">
-                                            <Store size={34} strokeWidth={1.4} className="text-stone-500" />
+                                        <div className="h-32 w-32 rounded-full mx-auto bg-stone-100 border border-stone-200 overflow-hidden flex items-center justify-center">
+                                            {shopLogoUrl && !shopLogoBroken ? (
+                                                <img src={mediaUrl(shopLogoUrl)} alt="" onError={() => setShopLogoBroken(true)} className="h-full w-full object-cover" />
+                                            ) : (
+                                                <Store size={34} strokeWidth={1.4} className="text-stone-500" />
+                                            )}
                                         </div>
                                         <p className="mt-5 text-center font-medium">{shopName}</p>
                                         <p className="mt-2 text-center text-sm text-stone-500">{shopCity}</p>

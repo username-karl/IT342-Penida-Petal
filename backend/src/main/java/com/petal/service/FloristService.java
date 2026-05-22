@@ -8,6 +8,7 @@ import com.petal.exception.ForbiddenException;
 import com.petal.repository.FloristRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
 
 @Service
 @RequiredArgsConstructor
@@ -20,6 +21,7 @@ public class FloristService {
     private static final int DEFAULT_PREP_LEAD_TIME_HOURS = 24;
 
     private final FloristRepository floristRepository;
+    private final OrderImageStorageService orderImageStorageService;
 
     public Florist createDefaultProfile(User user) {
         requireFloristUser(user);
@@ -83,6 +85,13 @@ public class FloristService {
             florist.setOnboardingComplete(request.getOnboardingComplete());
         }
 
+        return toResponse(floristRepository.save(florist));
+    }
+
+    public FloristResponse uploadProfileImage(User user, MultipartFile file) {
+        Florist florist = getOrCreateForUser(user);
+        String logoUrl = orderImageStorageService.storeFloristLogo(file);
+        florist.setLogoUrl(logoUrl);
         return toResponse(floristRepository.save(florist));
     }
 

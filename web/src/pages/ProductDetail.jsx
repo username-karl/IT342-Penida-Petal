@@ -4,7 +4,7 @@ import {
     ArrowLeft, Heart, Leaf, MapPin, MessageCircle, Minus, Package,
     Plus, ShieldCheck, ShoppingBag, Star, Store, Truck
 } from 'lucide-react';
-import { cartAPI, productsAPI } from '../services/api';
+import { cartAPI, mediaUrl, productsAPI } from '../services/api';
 
 const fallbackGallery = [
     '/images/product_pampas_1771726515735.png',
@@ -24,6 +24,7 @@ export default function ProductDetail() {
     const [cartMessage, setCartMessage] = useState('');
     const [cartError, setCartError] = useState('');
     const [addingToCart, setAddingToCart] = useState(false);
+    const [floristLogoBroken, setFloristLogoBroken] = useState(false);
 
     useEffect(() => {
         const fetchProduct = async () => {
@@ -234,11 +235,23 @@ export default function ProductDetail() {
 
                         <section className="bg-white/80 border border-stone-200 p-5 md:p-6 flex flex-col md:flex-row md:items-center justify-between gap-5">
                             <div className="flex items-center gap-4">
-                                <div className="w-14 h-14 rounded-full bg-stone-100 border border-stone-200 flex items-center justify-center">
-                                    <Store size={24} strokeWidth={1.5} className="text-stone-500" />
+                                <div className="w-14 h-14 rounded-full bg-stone-100 border border-stone-200 overflow-hidden flex items-center justify-center">
+                                    {!floristLogoBroken && product.floristLogoUrl ? (
+                                        <img
+                                            src={mediaUrl(product.floristLogoUrl)}
+                                            alt=""
+                                            onError={() => setFloristLogoBroken(true)}
+                                            className="h-full w-full object-cover"
+                                        />
+                                    ) : (
+                                        <Store size={24} strokeWidth={1.5} className="text-stone-500" />
+                                    )}
                                 </div>
                                 <div>
                                     <p className="font-serif text-2xl text-stone-900">{product.floristName || 'Local Petal Florist'}</p>
+                                    {product.floristBio && (
+                                        <p className="mt-1 max-w-xl text-sm text-stone-500 line-clamp-2">{product.floristBio}</p>
+                                    )}
                                     <p className="text-sm text-stone-500 flex items-center gap-1 mt-1">
                                         <MapPin size={14} strokeWidth={1.5} />
                                         Cebu, Philippines

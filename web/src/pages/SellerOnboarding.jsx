@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, CheckCircle2, Leaf, Package, Store, Truck } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CheckCircle2, Leaf, Package, Store, Truck, Upload } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { floristAPI, productsAPI } from '../services/api';
+import { floristAPI, mediaUrl, productsAPI } from '../services/api';
 
 const initialShop = {
     storeName: '',
@@ -39,6 +39,9 @@ export default function SellerOnboarding() {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
+    const [logoUploading, setLogoUploading] = useState(false);
+    const [logoStatus, setLogoStatus] = useState('');
+    const [logoBroken, setLogoBroken] = useState(false);
 
     const isArtisan = user?.role === 'artisan' || user?.role === 'ARTISAN' || user?.role === 'ROLE_FLORIST';
 
@@ -93,6 +96,27 @@ export default function SellerOnboarding() {
             prepLeadTimeHours: Number(delivery.prepLeadTimeHours),
             onboardingComplete: complete,
         });
+    };
+
+    const uploadLogo = async (event) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        setLogoUploading(true);
+        setLogoStatus('');
+        setError('');
+        try {
+            const response = await floristAPI.uploadProfileImage(file);
+            const profile = response.data.data;
+            setShop((current) => ({ ...current, logoUrl: profile.logoUrl || current.logoUrl }));
+            setLogoBroken(false);
+            setLogoStatus('Logo uploaded.');
+        } catch (err) {
+            setError(err.response?.data?.message || err.message || 'Unable to upload logo');
+        } finally {
+            setLogoUploading(false);
+            event.target.value = '';
+        }
     };
 
     const nextStep = async () => {
@@ -217,16 +241,33 @@ export default function SellerOnboarding() {
                                                 <span className="text-sm font-medium">Studio bio</span>
                                                 <textarea required rows={5} value={shop.bio} onChange={(event) => setShop({ ...shop, bio: event.target.value })} className="mt-2 w-full border border-stone-200 bg-stone-50 p-3 outline-none focus:border-stone-500" />
                                             </label>
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div className="grid grid-cols-1 md:grid-cols-[1fr_220px] gap-4">
                                                 <label className="block">
                                                     <span className="text-sm font-medium">City</span>
                                                     <input required value={shop.city} onChange={(event) => setShop({ ...shop, city: event.target.value })} className="mt-2 h-12 w-full border border-stone-200 bg-stone-50 px-3 outline-none focus:border-stone-500" />
                                                 </label>
-                                                <label className="block">
-                                                    <span className="text-sm font-medium">Logo URL</span>
-                                                    <input value={shop.logoUrl} onChange={(event) => setShop({ ...shop, logoUrl: event.target.value })} className="mt-2 h-12 w-full border border-stone-200 bg-stone-50 px-3 outline-none focus:border-stone-500" />
-                                                </label>
+                                                <div>
+                                                    <span className="text-sm font-medium">Store logo</span>
+                                                    <div className="mt-2 flex items-center gap-3">
+                                                        <div className="h-14 w-14 overflow-hidden rounded-full border border-stone-200 bg-stone-100 flex items-center justify-center">
+                                                            {shop.logoUrl && !logoBroken ? (
+                                                                <img src={mediaUrl(shop.logoUrl)} alt="" onError={() => setLogoBroken(true)} className="h-full w-full object-cover" />
+                                                            ) : (
+                                                                <Store size={20} strokeWidth={1.5} className="text-stone-500" />
+                                                            )}
+                                                        </div>
+                                                        <label className="h-12 px-4 border border-stone-200 bg-stone-50 text-sm font-medium inline-flex items-center justify-center gap-2 cursor-pointer hover:bg-white">
+                                                            <Upload size={15} /> {logoUploading ? 'Uploading...' : 'Upload'}
+                                                            <input type="file" accept="image/png,image/jpeg,image/jpg,image/webp" onChange={uploadLogo} disabled={logoUploading || saving} className="sr-only" />
+                                                        </label>
+                                                    </div>
+                                                    {logoStatus && <p className="mt-2 text-xs text-green-700">{logoStatus}</p>}
+                                                </div>
                                             </div>
+                                            <label className="block">
+                                                <span className="text-sm font-medium">Logo URL</span>
+                                                <input value={shop.logoUrl} onChange={(event) => { setShop({ ...shop, logoUrl: event.target.value }); setLogoBroken(false); }} className="mt-2 h-12 w-full border border-stone-200 bg-stone-50 px-3 outline-none focus:border-stone-500" />
+                                            </label>
                                         </>
                                     )}
 
