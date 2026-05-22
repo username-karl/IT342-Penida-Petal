@@ -46,6 +46,17 @@ mvn spring-boot:run
 ```
 The API will start on `http://localhost:8080`
 
+Backend configuration reads secrets from environment variables:
+
+| Variable | Default | Notes |
+|----------|---------|-------|
+| `DB_URL` | Local MySQL `petal_db` URL | Override for non-local databases |
+| `DB_USERNAME` | `root` | Local development default |
+| `DB_PASSWORD` | empty | Set this in your shell, IDE run config, or local env loader |
+| `JWT_SECRET` | local development placeholder | Replace for any shared or deployed environment |
+
+Use `.env.example` as a template for local environment values. Real `.env` files are ignored and should stay local.
+
 ### Web App Setup
 
 ```bash
