@@ -66,6 +66,7 @@ class OrderServiceTest {
                 .price(new BigDecimal("1500.00"))
                 .floristId(9L)
                 .floristName("Karl's Studio")
+                .inStock(true)
                 .build();
         CartItem cartItem = CartItem.builder()
                 .id(12L)
@@ -94,10 +95,46 @@ class OrderServiceTest {
         Mockito.verify(orderRepository).save(orderCaptor.capture());
         Order savedOrder = orderCaptor.getValue();
         Mockito.verify(deliverySlotAvailabilityService).validateOrderSlot(buyer, 9L, request.getDeliveryDate(), "AM");
+        Mockito.verify(cartItemRepository).deleteAll(List.of(cartItem));
+        assertThat(savedOrder.getStatus()).isEqualTo("PENDING");
         assertThat(savedOrder.getTrackingEvents()).hasSize(1);
         assertThat(savedOrder.getTrackingEvents().get(0).getStatus()).isEqualTo("Pending");
         assertThat(savedOrder.getTrackingEvents().get(0).getDescription())
                 .isEqualTo("Your order has been received and is waiting for florist confirmation.");
+    }
+
+    @Test
+    void createOrderRejectsOutOfStockCartItemBeforeSavingOrClearing() {
+        User buyer = User.builder().id(2L).name("Mikaela Santos").role("ROLE_BUYER").build();
+        Product product = Product.builder()
+                .id(7L)
+                .name("Aurora Hydrangea")
+                .price(new BigDecimal("1500.00"))
+                .floristId(9L)
+                .floristName("Karl's Studio")
+                .inStock(false)
+                .build();
+        CartItem cartItem = CartItem.builder()
+                .id(12L)
+                .user(buyer)
+                .product(product)
+                .quantity(1)
+                .build();
+        CreateOrderRequest request = CreateOrderRequest.builder()
+                .recipientName("Lara Santos")
+                .recipientAddress("Cebu Business Park")
+                .deliveryDate(LocalDate.of(2026, 5, 20))
+                .timeSlot("AM")
+                .paymentMethod("GCASH")
+                .build();
+
+        Mockito.when(cartItemRepository.findByUserOrderByIdAsc(buyer)).thenReturn(List.of(cartItem));
+
+        assertThatThrownBy(() -> orderService.createOrder(buyer, request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Aurora Hydrangea is out of stock. Please remove it from your cart.");
+        Mockito.verify(orderRepository, Mockito.never()).save(Mockito.any(Order.class));
+        Mockito.verify(cartItemRepository, Mockito.never()).deleteAll(Mockito.anyIterable());
     }
 
     @Test

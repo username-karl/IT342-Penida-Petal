@@ -71,6 +71,7 @@ public class OrderService {
         if (cartItems.isEmpty()) {
             throw new IllegalArgumentException("Cart is empty");
         }
+        validateCartProductsInStock(cartItems);
         Long floristId = resolveSingleFloristId(cartItems);
         deliverySlotAvailabilityService.validateOrderSlot(
                 user,
@@ -396,6 +397,16 @@ public class OrderService {
             throw new IllegalArgumentException("Checkout supports one florist per order");
         }
         return floristId;
+    }
+
+    private void validateCartProductsInStock(List<CartItem> cartItems) {
+        cartItems.stream()
+                .filter(item -> !item.getProduct().isInStock())
+                .findFirst()
+                .ifPresent(item -> {
+                    throw new IllegalArgumentException(
+                            item.getProduct().getName() + " is out of stock. Please remove it from your cart.");
+                });
     }
 
     private void validatePhotoFile(MultipartFile file) {
