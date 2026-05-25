@@ -121,7 +121,7 @@ export default function ProductDetail() {
                             <div>
                                 <div className="aspect-[4/5] overflow-hidden rounded-sm bg-stone-100">
                                     <img
-                                        src={activeImage || product.imageUrl}
+                                        src={mediaUrl(activeImage || product.imageUrl)}
                                         alt={product.name}
                                         className="w-full h-full object-cover"
                                     />
@@ -134,7 +134,7 @@ export default function ProductDetail() {
                                             onClick={() => setActiveImage(image)}
                                             className={`aspect-square overflow-hidden border rounded-sm bg-stone-100 ${activeImage === image ? 'border-stone-900' : 'border-stone-200 hover:border-stone-500'}`}
                                         >
-                                            <img src={image} alt={`${product.name} view ${index + 1}`} className="w-full h-full object-cover" />
+                                            <img src={mediaUrl(image)} alt={`${product.name} view ${index + 1}`} className="w-full h-full object-cover" />
                                         </button>
                                     ))}
                                 </div>

@@ -1,13 +1,16 @@
 import axios from 'axios';
 
-const API_BASE_URL = 'http://localhost:8080/api';
+const defaultApiBaseUrl = `${window.location.protocol}//${window.location.hostname}:8080/api`;
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || defaultApiBaseUrl).replace(/\/+$/, '');
 const API_ORIGIN = API_BASE_URL.replace(/\/api\/?$/, '');
 
 export function mediaUrl(value) {
-    if (!value) return '';
-    if (/^https?:\/\//i.test(value) || value.startsWith('data:')) return value;
-    if (value.startsWith('/uploads/')) return `${API_ORIGIN}${value}`;
-    return value;
+    const url = String(value || '').trim();
+    if (!url) return '';
+    if (/^(https?:)?\/\//i.test(url) || /^(data|blob):/i.test(url)) return url;
+    if (url.startsWith('/uploads/')) return `${API_ORIGIN}${url}`;
+    if (url.startsWith('uploads/')) return `${API_ORIGIN}/${url}`;
+    return url;
 }
 
 const api = axios.create({

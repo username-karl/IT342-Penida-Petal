@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, Camera, Check, Copy, Leaf } from 'lucide-react';
 import OrderTrackingStepper from '../components/OrderTrackingStepper';
-import { ordersAPI } from '../services/api';
+import { mediaUrl, ordersAPI } from '../services/api';
 
 function formatDate(value) {
     if (!value) return 'To be confirmed';
@@ -11,13 +11,6 @@ function formatDate(value) {
         day: 'numeric',
         year: 'numeric',
     });
-}
-
-function mediaUrl(value) {
-    if (!value) return '';
-    if (value.startsWith('http://') || value.startsWith('https://') || value.startsWith('/images/')) return value;
-    if (value.startsWith('/uploads/')) return `http://localhost:8080${value}`;
-    return value;
 }
 
 function OrderPhoto({ title, imageUrl }) {

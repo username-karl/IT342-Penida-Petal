@@ -734,7 +734,7 @@ export default function SellerCentre() {
                                                     <tr key={product.id} className="hover:bg-stone-50 align-top">
                                                         <td className="px-5 py-4 min-w-[280px]">
                                                             <div className="flex gap-3">
-                                                                <img src={product.imageUrl} alt={product.name} className="w-14 h-16 object-cover bg-stone-100 border border-stone-200" />
+                                                                <img src={mediaUrl(product.imageUrl)} alt={product.name} className="w-14 h-16 object-cover bg-stone-100 border border-stone-200" />
                                                                 <div>
                                                                     <p className="font-medium text-stone-950">{product.name}</p>
                                                                     <p className="text-xs text-stone-500 mt-1 line-clamp-2 max-w-sm">{product.description}</p>
@@ -829,7 +829,7 @@ export default function SellerCentre() {
                                         <div className="border border-stone-200 p-4 max-w-[280px] xl:max-w-none">
                                             <p className="text-sm font-medium text-stone-700 mb-3">Marketplace Preview</p>
                                             <div className="w-full max-h-48 overflow-hidden bg-stone-100 border border-stone-100">
-                                                <img src={formData.imageUrl || blankListing.imageUrl} alt="" className="w-full h-48 object-cover" />
+                                                <img src={mediaUrl(formData.imageUrl || blankListing.imageUrl)} alt="" className="w-full h-48 object-cover" />
                                             </div>
                                             <p className="mt-4 text-xs uppercase tracking-[0.18em] text-stone-400">{formData.floristName || shopName}</p>
                                             <p className="mt-1 font-serif text-2xl">{formData.name || 'Product name'}</p>

@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import {
     AlertCircle, Bell, CalendarDays, CheckCircle2, Gift, Heart, Leaf, MapPin, PackageCheck, Plus, Shield, Star, Trash2, Truck, Edit2, X
 } from 'lucide-react';
-import { addressesAPI, ordersAPI, savedDatesAPI } from '../services/api';
+import { addressesAPI, mediaUrl, ordersAPI, savedDatesAPI } from '../services/api';
 
 function currency(value) {
     const number = Number(value || 0);
@@ -533,7 +533,7 @@ export default function Profile() {
                                             <div className="flex gap-4 min-w-0">
                                                 {primaryOrderItem(currentGift)?.imageUrl ? (
                                                     <img
-                                                        src={primaryOrderItem(currentGift).imageUrl}
+                                                        src={mediaUrl(primaryOrderItem(currentGift).imageUrl)}
                                                         alt={primaryOrderItem(currentGift).productName || currentGift.itemSummary}
                                                         className="h-16 w-14 shrink-0 border border-stone-200 bg-stone-100 object-cover"
                                                     />
@@ -627,7 +627,7 @@ export default function Profile() {
                                                 <div className="mt-4 border-t border-stone-100 pt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
                                                     {(order.items || []).map((item) => (
                                                         <div key={`${order.id}-${item.productId}`} className="flex gap-3 min-w-0">
-                                                            <img src={item.imageUrl} alt={item.productName} className="h-14 w-12 object-cover bg-stone-100 border border-stone-200" />
+                                                            <img src={mediaUrl(item.imageUrl)} alt={item.productName} className="h-14 w-12 object-cover bg-stone-100 border border-stone-200" />
                                                             <div className="min-w-0">
                                                                 <p className="text-sm font-medium text-stone-900 truncate">{item.productName}</p>
                                                                 <p className="text-xs text-stone-500">{item.floristName}</p>

@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, Camera, CreditCard, Leaf, MapPin, Package } from 'lucide-react';
 import OrderStatusBadge, { getStatusLabel } from '../components/OrderStatusBadge';
 import ShippingInfoCard from '../components/ShippingInfoCard';
-import { ordersAPI } from '../services/api';
+import { mediaUrl, ordersAPI } from '../services/api';
 
 const paymentLabels = {
     COD: 'Cash on Delivery',
@@ -20,13 +20,6 @@ function deliveryLabel(order) {
     if (!order?.deliveryDate) return order?.timeSlot || 'Delivery pending';
     const date = new Date(`${order.deliveryDate}T00:00:00`);
     return `${date.toLocaleDateString('en-PH', { month: 'long', day: 'numeric', year: 'numeric' })} / ${order.timeSlot}`;
-}
-
-function mediaUrl(value) {
-    if (!value) return '';
-    if (value.startsWith('http://') || value.startsWith('https://') || value.startsWith('/images/')) return value;
-    if (value.startsWith('/uploads/')) return `http://localhost:8080${value}`;
-    return value;
 }
 
 function OrderPhoto({ title, imageUrl }) {
@@ -133,7 +126,7 @@ export default function OrderDetail() {
                                 <div className="divide-y divide-stone-100">
                                     {(order.items || []).map((item) => (
                                         <div key={`${order.id}-${item.productId}`} className="flex gap-4 p-5">
-                                            <img src={item.imageUrl} alt={item.productName} className="h-24 w-20 border border-stone-200 bg-stone-100 object-cover" />
+                                            <img src={mediaUrl(item.imageUrl)} alt={item.productName} className="h-24 w-20 border border-stone-200 bg-stone-100 object-cover" />
                                             <div className="min-w-0 flex-1">
                                                 <h3 className="font-serif text-xl text-stone-950">{item.productName}</h3>
                                                 <p className="mt-1 text-sm text-stone-500">{item.floristName}</p>

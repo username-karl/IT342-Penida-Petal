@@ -5,7 +5,7 @@ import { mediaUrl } from '../services/api';
 
 export default function ProductCard({ product }) {
     const [logoBroken, setLogoBroken] = useState(false);
-    const image = product.image || product.imageUrl;
+    const image = mediaUrl(product.image || product.imageUrl);
     const artisan = product.artisan || product.floristName;
     const subtitle = product.subtitle || product.description;
     const price = typeof product.price === 'number' ? `$${product.price.toFixed(2)}` : product.price;

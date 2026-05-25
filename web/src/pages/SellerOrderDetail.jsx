@@ -5,7 +5,7 @@ import OrderStatusBadge from '../components/OrderStatusBadge';
 import ShippingInfoCard from '../components/ShippingInfoCard';
 import TrackingTimeline from '../components/TrackingTimeline';
 import UpdateShippingStatusForm from '../components/UpdateShippingStatusForm';
-import { ordersAPI } from '../services/api';
+import { mediaUrl, ordersAPI } from '../services/api';
 
 const paymentLabels = { COD: 'COD', GCASH: 'GCash', MAYA: 'Maya', CARD: 'Card' };
 const ALLOWED_PHOTO_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
@@ -33,13 +33,6 @@ function canUploadFulfillment(status) {
 
 function canUploadProof(status) {
     return normalizeStatus(status) === 'DELIVERED';
-}
-
-function mediaUrl(value) {
-    if (!value) return '';
-    if (value.startsWith('http://') || value.startsWith('https://') || value.startsWith('/images/')) return value;
-    if (value.startsWith('/uploads/')) return `http://localhost:8080${value}`;
-    return value;
 }
 
 function OrderPhotoUpload({ title, helper, uploadedUrl, disabled, disabledText, onUpload }) {

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Gift } from 'lucide-react';
+import { mediaUrl } from '../services/api';
 
 export function currency(value) {
     const number = Number(value || 0);
@@ -59,7 +60,7 @@ function ProductThumbnail({ src, alt, className = 'h-16 w-14' }) {
 
     return (
         <img
-            src={src}
+            src={mediaUrl(src)}
             alt={alt}
             loading="lazy"
             onError={() => setFailed(true)}
