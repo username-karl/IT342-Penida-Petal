@@ -3,6 +3,7 @@ package com.petal.ui
 import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -35,6 +36,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.petal.BuildConfig
 import com.petal.PetalApplication
 import com.petal.data.account.DeliveryAddressResponse
 import com.petal.data.cart.CartItemResponse
@@ -48,6 +50,10 @@ import com.petal.data.checkout.BuyerOrderItemResponse
 import com.petal.data.checkout.BuyerOrderResponse
 import com.petal.data.checkout.DeliverySlotAvailabilityResponse
 import com.petal.data.checkout.OrderDisplayFormatters
+import com.petal.data.checkout.OrderTrackingStep
+import com.petal.data.checkout.OrderTrackingStepState
+import com.petal.data.checkout.OrderTrackingTimeline
+import com.petal.data.checkout.OrderTrackingTimelineState
 import com.petal.ui.components.EmptyPanel
 import com.petal.ui.components.ErrorBanner
 import com.petal.ui.components.LoadingProductGrid
@@ -172,7 +178,11 @@ fun PetalApp() {
                         } else {
                             null
                         },
-                        onOrders = { navController.navigate(Routes.OrderHistory) },
+                        onOrders = if (sessionViewModel.isBuyer) {
+                            { navController.navigate(Routes.OrderHistory) }
+                        } else {
+                            null
+                        },
                         onLogout = {
                             sessionViewModel.clear()
                             navController.navigate(Routes.Login) {
@@ -278,25 +288,47 @@ fun PetalApp() {
                     )
                 }
                 composable(Routes.OrderHistory) {
-                    OrderHistoryScreen(
-                        viewModel = orderHistoryViewModel,
-                        onBack = { navController.popBackStack() },
-                        onOrder = { orderId -> navController.navigate(Routes.orderDetail(orderId)) },
-                        onBrowse = { navController.navigate(Routes.Moods) }
-                    )
+                    if (sessionViewModel.isBuyer) {
+                        OrderHistoryScreen(
+                            viewModel = orderHistoryViewModel,
+                            onBack = { navController.popBackStack() },
+                            onOrder = { orderId -> navController.navigate(Routes.orderDetail(orderId)) },
+                            onBrowse = { navController.navigate(Routes.Moods) }
+                        )
+                    } else {
+                        BuyerAccessRequiredScreen(onBack = { navController.popBackStack() })
+                    }
                 }
                 composable(
                     route = Routes.OrderDetail,
                     arguments = listOf(navArgument("id") { type = NavType.LongType })
                 ) { entry ->
-                    OrderDetailScreen(
-                        id = entry.arguments?.getLong("id") ?: 0L,
-                        viewModel = orderHistoryViewModel,
-                        onBack = { navController.popBackStack() }
-                    )
+                    if (sessionViewModel.isBuyer) {
+                        OrderDetailScreen(
+                            id = entry.arguments?.getLong("id") ?: 0L,
+                            viewModel = orderHistoryViewModel,
+                            onBack = { navController.popBackStack() }
+                        )
+                    } else {
+                        BuyerAccessRequiredScreen(onBack = { navController.popBackStack() })
+                    }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun BuyerAccessRequiredScreen(onBack: () -> Unit) {
+    Column(Modifier.fillMaxSize().background(Paper)) {
+        PetalHeader(title = "Buyer Orders", action = {
+            PetalSecondaryButton("Back", onClick = onBack)
+        })
+        EmptyPanel(
+            title = "Buyer access required",
+            message = "Order tracking is available for buyer accounts.",
+            modifier = Modifier.padding(20.dp)
+        )
     }
 }
 
@@ -397,7 +429,7 @@ private fun MoodGridScreen(
     displayName: String,
     onMood: (String) -> Unit,
     onAccount: (() -> Unit)?,
-    onOrders: () -> Unit,
+    onOrders: (() -> Unit)?,
     onLogout: () -> Unit
 ) {
     Column(Modifier.fillMaxSize().background(Paper)) {
@@ -407,7 +439,7 @@ private fun MoodGridScreen(
             action = {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     onAccount?.let { PetalSecondaryButton("Account", it) }
-                    PetalSecondaryButton("Orders", onOrders)
+                    onOrders?.let { PetalSecondaryButton("Orders", it) }
                     PetalSecondaryButton("Sign out", onLogout)
                 }
             }
@@ -1198,6 +1230,14 @@ private fun OrderDetailContent(order: BuyerOrderResponse, detailError: String?) 
                 InfoPanel(title = "Card Message", body = message)
             }
         }
+        item {
+            OrderTrackingPanel(
+                timeline = OrderTrackingTimeline.build(
+                    status = order.status,
+                    events = order.shipping?.events.orEmpty()
+                )
+            )
+        }
         if (order.items.isNotEmpty()) {
             item {
                 Text("Items", style = MaterialTheme.typography.headlineSmall)
@@ -1222,22 +1262,145 @@ private fun OrderDetailContent(order: BuyerOrderResponse, detailError: String?) 
                     ).joinToString("\n")
                 )
             }
-            if (shipping.events.isNotEmpty()) {
-                item {
-                    Text("Tracking Updates", style = MaterialTheme.typography.headlineSmall)
-                }
-                items(shipping.events) { event ->
-                    InfoPanel(
-                        title = OrderDisplayFormatters.orFallback(event.status, "Update"),
-                        body = listOfNotNull(
-                            event.description?.trim()?.takeIf { it.isNotBlank() },
-                            event.timestamp?.trim()?.takeIf { it.isNotBlank() }
-                        ).joinToString("\n").ifBlank { "Tracking update received." }
-                    )
-                }
+        }
+        val proofImageUrl = order.proofImageUrl ?: order.shipping?.proofImageUrl
+        if (OrderTrackingTimeline.isDelivered(order.status) && !proofImageUrl.isNullOrBlank()) {
+            item {
+                OrderProofImageCard(imageUrl = proofImageUrl)
             }
         }
     }
+}
+
+@Composable
+private fun OrderTrackingPanel(timeline: OrderTrackingTimelineState) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .background(SurfaceWarm, RoundedCornerShape(8.dp))
+            .border(1.dp, Stone200, RoundedCornerShape(8.dp))
+            .padding(18.dp)
+    ) {
+        Text("Tracking Timeline", style = MaterialTheme.typography.headlineSmall)
+        if (!timeline.hasKnownStatus) {
+            Spacer(Modifier.height(10.dp))
+            Text(
+                "Tracking is using the latest order status while Petal confirms the next delivery update.",
+                color = Stone500,
+                style = MaterialTheme.typography.bodyMedium
+            )
+        }
+        if (timeline.isCancelled) {
+            Spacer(Modifier.height(10.dp))
+            Text(
+                "This order was cancelled before delivery.",
+                color = Stone700,
+                style = MaterialTheme.typography.bodyMedium
+            )
+        }
+        Spacer(Modifier.height(14.dp))
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            timeline.steps.forEach { step ->
+                OrderTrackingStepRow(step)
+            }
+        }
+    }
+}
+
+@Composable
+private fun OrderTrackingStepRow(step: OrderTrackingStep) {
+    val isFuture = step.state == OrderTrackingStepState.FUTURE
+    val markerColor = when (step.state) {
+        OrderTrackingStepState.COMPLETE -> Stone950
+        OrderTrackingStepState.CURRENT -> BlushSoft
+        OrderTrackingStepState.CANCELLED -> Stone200
+        OrderTrackingStepState.FUTURE -> Stone200
+    }
+    val labelColor = if (isFuture) Stone500 else Stone950
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(18.dp)
+                .background(markerColor, RoundedCornerShape(999.dp))
+                .border(1.dp, Stone200, RoundedCornerShape(999.dp))
+        )
+        Column(Modifier.weight(1f)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(step.label, color = labelColor, fontWeight = FontWeight.SemiBold)
+                StepStatePill(step.state)
+            }
+            Text(
+                step.eventDescription ?: step.description,
+                color = if (isFuture) Stone500 else Stone700,
+                style = MaterialTheme.typography.bodyMedium
+            )
+            step.eventTimestamp?.let { timestamp ->
+                Spacer(Modifier.height(3.dp))
+                Text(timestamp, color = Stone500, style = MaterialTheme.typography.labelSmall)
+            }
+        }
+    }
+}
+
+@Composable
+private fun StepStatePill(state: OrderTrackingStepState) {
+    val label = when (state) {
+        OrderTrackingStepState.COMPLETE -> "Done"
+        OrderTrackingStepState.CURRENT -> "Now"
+        OrderTrackingStepState.CANCELLED -> "Cancelled"
+        OrderTrackingStepState.FUTURE -> ""
+    }
+    if (label.isBlank()) return
+    Text(
+        text = label,
+        modifier = Modifier
+            .background(if (state == OrderTrackingStepState.CURRENT) SageSoft else SurfaceWarm, RoundedCornerShape(999.dp))
+            .border(1.dp, Stone200, RoundedCornerShape(999.dp))
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+        color = Stone950,
+        style = MaterialTheme.typography.labelSmall
+    )
+}
+
+@Composable
+private fun OrderProofImageCard(imageUrl: String) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .background(SurfaceWarm, RoundedCornerShape(8.dp))
+            .border(1.dp, Stone200, RoundedCornerShape(8.dp))
+            .padding(18.dp)
+    ) {
+        Text("Proof of Delivery", style = MaterialTheme.typography.headlineSmall)
+        Spacer(Modifier.height(10.dp))
+        AsyncImage(
+            model = orderMediaUrl(imageUrl),
+            contentDescription = "Proof of delivery photo",
+            contentScale = ContentScale.Crop,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(220.dp)
+                .clip(RoundedCornerShape(6.dp))
+                .background(SurfaceWarm)
+                .border(1.dp, Stone200, RoundedCornerShape(6.dp))
+        )
+    }
+}
+
+private fun orderMediaUrl(value: String): String {
+    val trimmed = value.trim()
+    if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) return trimmed
+    if (trimmed.startsWith("/uploads/")) {
+        return BuildConfig.PETAL_API_BASE_URL.trimEnd('/') + trimmed
+    }
+    return trimmed
 }
 
 @Composable
