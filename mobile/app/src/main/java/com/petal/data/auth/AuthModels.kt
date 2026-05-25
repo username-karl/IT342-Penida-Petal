@@ -1,5 +1,7 @@
 package com.petal.data.auth
 
+// Matches the live Spring Boot ApiResponse shape. The SDD still documents
+// success/data/error/timestamp, but the current backend returns success/message/data.
 data class ApiResponse<T>(
     val success: Boolean,
     val message: String,

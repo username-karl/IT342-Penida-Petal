@@ -17,7 +17,6 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -27,7 +26,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -38,9 +36,14 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.petal.PetalApplication
+import com.petal.data.cart.CartItemResponse
 import com.petal.data.catalog.CatalogFormatters
 import com.petal.data.catalog.PetalMoods
 import com.petal.data.catalog.ProductResponse
+import com.petal.data.checkout.CheckoutCardMessageValidator
+import com.petal.data.checkout.CheckoutScheduleValidator
+import com.petal.data.checkout.CheckoutStep3Validator
+import com.petal.data.checkout.DeliverySlotAvailabilityResponse
 import com.petal.ui.components.EmptyPanel
 import com.petal.ui.components.ErrorBanner
 import com.petal.ui.components.LoadingProductGrid
@@ -62,10 +65,8 @@ import com.petal.ui.theme.Stone950
 import com.petal.ui.theme.SurfaceWarm
 import androidx.compose.ui.platform.LocalContext
 import coil.compose.AsyncImage
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -76,6 +77,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Locale
 
 private object Routes {
     const val Login = "login"
@@ -83,6 +87,11 @@ private object Routes {
     const val Moods = "moods"
     const val Products = "products/{mood}"
     const val Product = "product/{id}"
+    const val Cart = "cart"
+    const val CheckoutRecipient = "checkout/recipient"
+    const val CheckoutCardMessage = "checkout/card-message"
+    const val CheckoutSchedulePay = "checkout/schedule-pay"
+    const val OrderConfirmation = "checkout/confirmation"
 
     fun products(mood: String) = "products/${Uri.encode(mood)}"
     fun product(id: Long) = "product/$id"
@@ -98,6 +107,12 @@ fun PetalApp() {
     )
     val catalogViewModel: CatalogViewModel = viewModel(
         factory = PetalViewModelFactory(catalogRepository = container.catalogRepository)
+    )
+    val cartViewModel: CartViewModel = viewModel(
+        factory = PetalViewModelFactory(cartRepository = container.cartRepository)
+    )
+    val checkoutViewModel: CheckoutViewModel = viewModel(
+        factory = PetalViewModelFactory(checkoutRepository = container.checkoutRepository)
     )
     val sessionViewModel: SessionViewModel = viewModel(
         factory = PetalViewModelFactory(sessionStore = container.sessionStore)
@@ -151,6 +166,7 @@ fun PetalApp() {
                         mood = mood,
                         viewModel = catalogViewModel,
                         onBack = { navController.popBackStack() },
+                        onCart = { navController.navigate(Routes.Cart) },
                         onProduct = { productId -> navController.navigate(Routes.product(productId)) }
                     )
                 }
@@ -161,7 +177,55 @@ fun PetalApp() {
                     ProductDetailScreen(
                         id = entry.arguments?.getLong("id") ?: 0L,
                         viewModel = catalogViewModel,
+                        cartViewModel = cartViewModel,
                         navController = navController
+                    )
+                }
+                composable(Routes.Cart) {
+                    CartScreen(
+                        viewModel = cartViewModel,
+                        onBack = { navController.popBackStack() },
+                        onCheckout = { navController.navigate(Routes.CheckoutRecipient) },
+                        onProduct = { productId -> navController.navigate(Routes.product(productId)) },
+                        onBrowse = { navController.navigate(Routes.Moods) }
+                    )
+                }
+                composable(Routes.CheckoutRecipient) {
+                    CheckoutRecipientScreen(
+                        viewModel = checkoutViewModel,
+                        onBack = { navController.popBackStack() },
+                        onNext = { navController.navigate(Routes.CheckoutCardMessage) }
+                    )
+                }
+                composable(Routes.CheckoutCardMessage) {
+                    CheckoutCardMessageScreen(
+                        viewModel = checkoutViewModel,
+                        onBack = { navController.popBackStack() },
+                        onNext = { navController.navigate(Routes.CheckoutSchedulePay) }
+                    )
+                }
+                composable(Routes.CheckoutSchedulePay) {
+                    CheckoutSchedulePayScreen(
+                        viewModel = checkoutViewModel,
+                        cartViewModel = cartViewModel,
+                        onBack = { navController.popBackStack() },
+                        onOrderSuccess = {
+                            cartViewModel.loadCart()
+                            navController.navigate(Routes.OrderConfirmation) {
+                                popUpTo(Routes.CheckoutRecipient) { inclusive = true }
+                            }
+                        }
+                    )
+                }
+                composable(Routes.OrderConfirmation) {
+                    OrderConfirmationScreen(
+                        confirmation = checkoutViewModel.state.collectAsState().value.orderConfirmation,
+                        onHome = {
+                            checkoutViewModel.clearOrderConfirmation()
+                            navController.navigate(Routes.Moods) {
+                                popUpTo(Routes.Moods) { inclusive = true }
+                            }
+                        }
                     )
                 }
             }
@@ -299,6 +363,7 @@ private fun ProductListScreen(
     mood: String,
     viewModel: CatalogViewModel,
     onBack: () -> Unit,
+    onCart: () -> Unit,
     onProduct: (Long) -> Unit
 ) {
     val state by viewModel.state.collectAsState()
@@ -308,7 +373,10 @@ private fun ProductListScreen(
 
     Column(Modifier.fillMaxSize().background(Paper)) {
         PetalHeader(title = moodLabel(mood), subtitle = "Arrangements for this feeling", action = {
-            PetalSecondaryButton("Back", onBack)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                PetalSecondaryButton("Cart", onCart)
+                PetalSecondaryButton("Back", onBack)
+            }
         })
         when {
             state.loading -> LoadingProductGrid(Modifier.padding(20.dp))
@@ -332,10 +400,17 @@ private fun ProductListScreen(
 }
 
 @Composable
-private fun ProductDetailScreen(id: Long, viewModel: CatalogViewModel, navController: NavHostController) {
+private fun ProductDetailScreen(
+    id: Long,
+    viewModel: CatalogViewModel,
+    cartViewModel: CartViewModel,
+    navController: NavHostController
+) {
     val state by viewModel.state.collectAsState()
+    val cartState by cartViewModel.state.collectAsState()
     LaunchedEffect(id) {
         viewModel.loadProduct(id)
+        cartViewModel.clearMessages()
     }
 
     Column(Modifier.fillMaxSize().background(Paper)) {
@@ -349,14 +424,24 @@ private fun ProductDetailScreen(id: Long, viewModel: CatalogViewModel, navContro
                 message = state.error.orEmpty(),
                 modifier = Modifier.padding(20.dp)
             )
-            state.selectedProduct != null -> ProductDetailContent(state.selectedProduct!!)
+            state.selectedProduct != null -> ProductDetailContent(
+                product = state.selectedProduct!!,
+                cartState = cartState,
+                onAddToCart = { cartViewModel.addProduct(state.selectedProduct!!.id) },
+                onViewCart = { navController.navigate(Routes.Cart) }
+            )
         }
     }
 }
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun ProductDetailContent(product: ProductResponse) {
+private fun ProductDetailContent(
+    product: ProductResponse,
+    cartState: CartUiState,
+    onAddToCart: () -> Unit,
+    onViewCart: () -> Unit
+) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(20.dp),
@@ -392,6 +477,672 @@ private fun ProductDetailContent(product: ProductResponse) {
         item {
             InfoPanel(title = "Product Description", body = product.description)
         }
+        item {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .background(SurfaceWarm, RoundedCornerShape(4.dp))
+                    .border(1.dp, Stone200, RoundedCornerShape(4.dp))
+                    .padding(18.dp)
+            ) {
+                cartState.successMessage?.let {
+                    SuccessBanner(message = it, modifier = Modifier.padding(bottom = 12.dp))
+                }
+                cartState.error?.let {
+                    ErrorBanner(message = it, modifier = Modifier.padding(bottom = 12.dp))
+                }
+                PetalPrimaryButton(
+                    text = if (product.inStock) "Add to Cart" else "Currently Unavailable",
+                    onClick = onAddToCart,
+                    enabled = product.inStock,
+                    loading = cartState.actionLoading,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                if (cartState.successMessage != null) {
+                    PetalSecondaryButton("View Cart", onViewCart, Modifier.fillMaxWidth())
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CartScreen(
+    viewModel: CartViewModel,
+    onBack: () -> Unit,
+    onCheckout: () -> Unit,
+    onProduct: (Long) -> Unit,
+    onBrowse: () -> Unit
+) {
+    val state by viewModel.state.collectAsState()
+    LaunchedEffect(Unit) {
+        viewModel.loadCart()
+    }
+
+    Column(Modifier.fillMaxSize().background(Paper)) {
+        PetalHeader(title = "Your Petal Basket", subtitle = "Review gifts before checkout", action = {
+            PetalSecondaryButton("Back", onBack)
+        })
+        when {
+            state.loading -> LoadingProductGrid(Modifier.padding(20.dp))
+            state.error != null && state.cart.items.isEmpty() -> ErrorBanner(state.error.orEmpty(), Modifier.padding(20.dp))
+            state.cart.items.isEmpty() -> EmptyPanel(
+                title = "Your basket is empty",
+                message = "Add an arrangement to begin checkout.",
+                modifier = Modifier.padding(20.dp)
+            )
+            else -> CartContent(
+                state = state,
+                onProduct = onProduct,
+                onQuantity = viewModel::updateQuantity,
+                onRemove = viewModel::removeItem,
+                onCheckout = onCheckout
+            )
+        }
+        if (!state.loading && state.cart.items.isEmpty()) {
+            PetalPrimaryButton("Browse Moods", onBrowse, Modifier.padding(20.dp).fillMaxWidth())
+        }
+    }
+}
+
+@Composable
+private fun CartContent(
+    state: CartUiState,
+    onProduct: (Long) -> Unit,
+    onQuantity: (CartItemResponse, Int) -> Unit,
+    onRemove: (Long) -> Unit,
+    onCheckout: () -> Unit
+) {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(20.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        state.error?.let { error ->
+            item { ErrorBanner(error) }
+        }
+        state.successMessage?.let { message ->
+            item { SuccessBanner(message) }
+        }
+        items(state.cart.items) { item ->
+            CartItemCard(
+                item = item,
+                actionLoading = state.actionLoading,
+                onProduct = { onProduct(item.productId) },
+                onQuantity = { quantity -> onQuantity(item, quantity) },
+                onRemove = { onRemove(item.id) }
+            )
+        }
+        item {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .background(SurfaceWarm, RoundedCornerShape(4.dp))
+                    .border(1.dp, Stone200, RoundedCornerShape(4.dp))
+                    .padding(18.dp)
+            ) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("Subtotal", color = Stone500)
+                    Text(CatalogFormatters.formatPeso(state.cart.subtotal), color = Stone950, fontWeight = FontWeight.SemiBold)
+                }
+                Spacer(Modifier.height(8.dp))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("Total", style = MaterialTheme.typography.titleLarge)
+                    Text(CatalogFormatters.formatPeso(state.cart.subtotal), style = MaterialTheme.typography.titleLarge)
+                }
+                Spacer(Modifier.height(16.dp))
+                PetalPrimaryButton(
+                    text = "Proceed to Checkout",
+                    onClick = onCheckout,
+                    enabled = !state.actionLoading,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun CartItemCard(
+    item: CartItemResponse,
+    actionLoading: Boolean,
+    onProduct: () -> Unit,
+    onQuantity: (Int) -> Unit,
+    onRemove: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(SurfaceWarm, RoundedCornerShape(4.dp))
+            .border(1.dp, Stone200, RoundedCornerShape(4.dp))
+            .padding(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        AsyncImage(
+            model = item.productImageUrl,
+            contentDescription = item.productName,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier
+                .size(88.dp)
+                .clip(RoundedCornerShape(4.dp))
+                .background(SurfaceWarm)
+                .border(1.dp, Stone200, RoundedCornerShape(4.dp))
+                .clickable(onClick = onProduct)
+        )
+        Column(Modifier.weight(1f)) {
+            Text(item.floristName ?: "Local Petal Florist", style = MaterialTheme.typography.labelSmall)
+            Spacer(Modifier.height(4.dp))
+            Text(item.productName, style = MaterialTheme.typography.titleLarge)
+            Text(CatalogFormatters.formatPeso(item.unitPrice), color = Stone700)
+            Spacer(Modifier.height(10.dp))
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                PetalSecondaryButton("-", onClick = { onQuantity(item.quantity - 1) }, modifier = Modifier.size(44.dp))
+                Text(item.quantity.toString(), color = Stone950, fontWeight = FontWeight.SemiBold)
+                PetalSecondaryButton("+", onClick = { onQuantity(item.quantity + 1) }, modifier = Modifier.size(44.dp))
+                PetalSecondaryButton("Remove", onClick = onRemove)
+            }
+            if (actionLoading) {
+                Text("Updating...", color = Stone500, style = MaterialTheme.typography.bodyMedium)
+            }
+        }
+        Text(CatalogFormatters.formatPeso(item.lineTotal), color = Stone950, fontWeight = FontWeight.SemiBold)
+    }
+}
+
+@Composable
+private fun CheckoutRecipientScreen(viewModel: CheckoutViewModel, onBack: () -> Unit, onNext: () -> Unit) {
+    val state by viewModel.state.collectAsState()
+
+    Column(Modifier.fillMaxSize().background(Paper)) {
+        PetalHeader(title = "Checkout", subtitle = "Step 1 of 3", action = {
+            PetalSecondaryButton("Back", onBack)
+        })
+        Column(
+            Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(20.dp)
+        ) {
+            Text("Recipient Details", style = MaterialTheme.typography.displayMedium)
+            Spacer(Modifier.height(18.dp))
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .background(SurfaceWarm, RoundedCornerShape(4.dp))
+                    .border(1.dp, Stone200, RoundedCornerShape(4.dp))
+                    .padding(18.dp)
+            ) {
+                PetalTextField("Recipient Name", state.recipientName, viewModel::setRecipientName)
+                Spacer(Modifier.height(16.dp))
+                PetalTextField(
+                    label = "Recipient Address",
+                    value = state.recipientAddress,
+                    onValueChange = viewModel::setRecipientAddress,
+                    singleLine = false
+                )
+                state.error?.let {
+                    Spacer(Modifier.height(16.dp))
+                    ErrorBanner(it)
+                }
+                Spacer(Modifier.height(22.dp))
+                PetalPrimaryButton(
+                    text = "Next",
+                    onClick = {
+                        if (viewModel.validateRecipientDetails()) {
+                            onNext()
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun CheckoutCardMessageScreen(viewModel: CheckoutViewModel, onBack: () -> Unit, onNext: () -> Unit) {
+    val state by viewModel.state.collectAsState()
+
+    Column(Modifier.fillMaxSize().background(Paper)) {
+        PetalHeader(title = "Checkout", subtitle = "Step 2 of 3", action = {
+            PetalSecondaryButton("Back", onBack)
+        })
+        Column(
+            Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(20.dp)
+        ) {
+            Text("Card Message", style = MaterialTheme.typography.displayMedium)
+            Spacer(Modifier.height(18.dp))
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .background(SurfaceWarm, RoundedCornerShape(4.dp))
+                    .border(1.dp, Stone200, RoundedCornerShape(4.dp))
+                    .padding(18.dp)
+            ) {
+                PetalTextField(
+                    label = "Message",
+                    value = state.cardMessage,
+                    onValueChange = viewModel::setCardMessage,
+                    singleLine = false
+                )
+                Spacer(Modifier.height(8.dp))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("Optional", color = Stone500, style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        "${state.cardMessage.length}/${CheckoutCardMessageValidator.maxLength}",
+                        color = Stone500,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+                state.cardMessageError?.let {
+                    Spacer(Modifier.height(16.dp))
+                    ErrorBanner(it)
+                }
+                Spacer(Modifier.height(18.dp))
+                CardMessagePreview(message = state.cardMessage)
+                Spacer(Modifier.height(22.dp))
+                PetalPrimaryButton(
+                    text = "Continue",
+                    onClick = {
+                        if (viewModel.validateCardMessage()) {
+                            onNext()
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun CardMessagePreview(message: String) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .background(BlushSoft, RoundedCornerShape(8.dp))
+            .border(1.dp, SageSoft, RoundedCornerShape(8.dp))
+            .padding(18.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text("Petal", style = MaterialTheme.typography.titleLarge, color = Stone950)
+        Spacer(Modifier.height(12.dp))
+        Text(
+            if (message.isBlank()) "Your note will be tucked beside the bouquet."
+            else message.trim(),
+            color = Stone700,
+            style = MaterialTheme.typography.bodyMedium
+        )
+    }
+}
+
+@Composable
+private fun CheckoutSchedulePayScreen(
+    viewModel: CheckoutViewModel,
+    cartViewModel: CartViewModel,
+    onBack: () -> Unit,
+    onOrderSuccess: () -> Unit
+) {
+    val state by viewModel.state.collectAsState()
+    val cartState by cartViewModel.state.collectAsState()
+    val scheduleValid = CheckoutStep3Validator.canConfirm(
+        deliveryEpochDay = state.deliveryEpochDay,
+        timeSlot = state.timeSlot,
+        availability = state.slotAvailability,
+        cartHasItems = cartState.cart.items.isNotEmpty(),
+        recipientName = state.recipientName,
+        recipientAddress = state.recipientAddress
+    ) && !state.orderLoading
+
+    Column(Modifier.fillMaxSize().background(Paper)) {
+        PetalHeader(title = "Checkout", subtitle = "Step 3 of 3", action = {
+            PetalSecondaryButton("Back", onBack)
+        })
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            item {
+                Text("Schedule & Pay", style = MaterialTheme.typography.displayMedium)
+            }
+            item {
+                SchedulePicker(
+                    selectedDate = state.deliveryEpochDay,
+                    selectedSlot = state.timeSlot,
+                    availability = state.slotAvailability,
+                    loading = state.slotAvailabilityLoading,
+                    availabilityError = state.slotAvailabilityError,
+                    error = state.scheduleError,
+                    onDate = { epochDay, label -> viewModel.selectDeliveryDate(epochDay, label, cartState.cart) },
+                    onSlot = viewModel::setTimeSlot
+                )
+            }
+            item {
+                CheckoutOrderSummary(
+                    cartState = cartState,
+                    checkoutState = state
+                )
+            }
+            item {
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .background(SurfaceWarm, RoundedCornerShape(4.dp))
+                        .border(1.dp, Stone200, RoundedCornerShape(4.dp))
+                        .padding(18.dp)
+                ) {
+                    Text("Mock payment", style = MaterialTheme.typography.headlineSmall)
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "This submits the order with a mock card payment. No real payment is processed.",
+                        color = Stone700,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    state.orderError?.let {
+                        Spacer(Modifier.height(16.dp))
+                        ErrorBanner(it)
+                    }
+                    Spacer(Modifier.height(18.dp))
+                    PetalPrimaryButton(
+                        text = "Confirm & Pay (Mock)",
+                        onClick = { viewModel.placeOrder(cartState.cart, onOrderSuccess) },
+                        enabled = scheduleValid,
+                        loading = state.orderLoading,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun OrderConfirmationScreen(confirmation: OrderConfirmationUiState?, onHome: () -> Unit) {
+    Column(Modifier.fillMaxSize().background(Paper)) {
+        PetalHeader(title = "Order Confirmed", subtitle = "Your gift is on its way")
+        Column(
+            Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(20.dp)
+        ) {
+            if (confirmation == null) {
+                EmptyPanel(
+                    title = "Confirmation unavailable",
+                    message = "Return home to continue shopping."
+                )
+                Spacer(Modifier.height(18.dp))
+                PetalPrimaryButton("Return Home", onHome, Modifier.fillMaxWidth())
+            } else {
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .background(SageSoft, RoundedCornerShape(8.dp))
+                        .border(1.dp, Stone200, RoundedCornerShape(8.dp))
+                        .padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text("✓", style = MaterialTheme.typography.displayMedium, color = Stone950)
+                    Spacer(Modifier.height(8.dp))
+                    Text("Order placed", style = MaterialTheme.typography.headlineSmall)
+                    Spacer(Modifier.height(6.dp))
+                    Text(confirmation.order.message ?: "Your order has been received.", color = Stone700)
+                }
+                Spacer(Modifier.height(18.dp))
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .background(SurfaceWarm, RoundedCornerShape(4.dp))
+                        .border(1.dp, Stone200, RoundedCornerShape(4.dp))
+                        .padding(18.dp)
+                ) {
+                    SummaryRow("Order ID", confirmation.order.id.toString())
+                    SummaryRow("Status", confirmation.order.status)
+                    SummaryRow("Delivery Date", confirmation.order.deliveryDate ?: "Not set")
+                    SummaryRow("Time Slot", confirmation.order.timeSlot ?: "Not set")
+                    SummaryRow("Payment Method", confirmation.order.paymentMethod ?: CheckoutViewModel.mockPaymentMethod)
+                    SummaryDivider()
+                    SummaryTextBlock(
+                        title = confirmation.recipientName,
+                        body = confirmation.recipientAddress
+                    )
+                }
+                Spacer(Modifier.height(18.dp))
+                PetalPrimaryButton("Return Home", onHome, Modifier.fillMaxWidth())
+            }
+        }
+    }
+}
+
+@Composable
+private fun SchedulePicker(
+    selectedDate: Long?,
+    selectedSlot: String,
+    availability: DeliverySlotAvailabilityResponse?,
+    loading: Boolean,
+    availabilityError: String?,
+    error: String?,
+    onDate: (Long, String) -> Unit,
+    onSlot: (String) -> Unit
+) {
+    val options = deliveryDateOptions()
+
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .background(SurfaceWarm, RoundedCornerShape(4.dp))
+            .border(1.dp, Stone200, RoundedCornerShape(4.dp))
+            .padding(18.dp)
+    ) {
+        Text("Delivery Date", style = MaterialTheme.typography.headlineSmall)
+        Spacer(Modifier.height(12.dp))
+        options.forEach { option ->
+            val selected = selectedDate == option.epochDay
+            DateOptionRow(
+                label = option.label,
+                detail = option.detail,
+                selected = selected,
+                onClick = { onDate(option.epochDay, option.detail) }
+            )
+            Spacer(Modifier.height(8.dp))
+        }
+        Spacer(Modifier.height(8.dp))
+        Text("Time Slot", style = MaterialTheme.typography.headlineSmall)
+        Spacer(Modifier.height(12.dp))
+        if (loading) {
+            Text("Loading delivery slots...", color = Stone500, style = MaterialTheme.typography.bodyMedium)
+            Spacer(Modifier.height(12.dp))
+        }
+        availabilityError?.let {
+            ErrorBanner(it)
+            Spacer(Modifier.height(12.dp))
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+            val amAvailable = availability?.am?.available == true
+            val pmAvailable = availability?.pm?.available == true
+            SlotButton(
+                text = slotLabel("AM", availability?.am?.remaining),
+                selected = selectedSlot == CheckoutScheduleValidator.morningSlot,
+                onClick = { onSlot(CheckoutScheduleValidator.morningSlot) },
+                enabled = amAvailable && !loading,
+                modifier = Modifier.weight(1f)
+            )
+            SlotButton(
+                text = slotLabel("PM", availability?.pm?.remaining),
+                selected = selectedSlot == CheckoutScheduleValidator.afternoonSlot,
+                onClick = { onSlot(CheckoutScheduleValidator.afternoonSlot) },
+                enabled = pmAvailable && !loading,
+                modifier = Modifier.weight(1f)
+            )
+        }
+        error?.let {
+            Spacer(Modifier.height(16.dp))
+            ErrorBanner(it)
+        }
+    }
+}
+
+private fun slotLabel(slot: String, remaining: Int?): String {
+    return if (remaining == null) {
+        slot
+    } else {
+        "$slot\n$remaining left"
+    }
+}
+
+private data class DeliveryDateOption(
+    val epochDay: Long,
+    val label: String,
+    val detail: String
+)
+
+private fun deliveryDateOptions(): List<DeliveryDateOption> {
+    val base = Calendar.getInstance()
+    val detailFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+    val labelFormat = SimpleDateFormat("MMM d", Locale.getDefault())
+
+    return (0..4).map { offset ->
+        val calendar = base.clone() as Calendar
+        calendar.add(Calendar.DAY_OF_YEAR, offset)
+        DeliveryDateOption(
+            epochDay = CheckoutScheduleValidator.epochDay(calendar),
+            label = when (offset) {
+                0 -> "Today"
+                1 -> "Tomorrow"
+                else -> labelFormat.format(calendar.time)
+            },
+            detail = detailFormat.format(calendar.time)
+        )
+    }
+}
+
+@Composable
+private fun DateOptionRow(label: String, detail: String, selected: Boolean, onClick: () -> Unit) {
+    val background = if (selected) SageSoft else Paper
+    val border = if (selected) Stone950 else Stone200
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(4.dp))
+            .clickable(onClick = onClick)
+            .background(background, RoundedCornerShape(4.dp))
+            .border(1.dp, border, RoundedCornerShape(4.dp))
+            .padding(14.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(label, color = Stone950, fontWeight = FontWeight.SemiBold)
+        Text(detail, color = Stone500, style = MaterialTheme.typography.bodyMedium)
+    }
+}
+
+@Composable
+private fun SlotButton(
+    text: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    enabled: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val background = when {
+        selected -> BlushSoft
+        enabled -> Paper
+        else -> SurfaceWarm
+    }
+    val border = if (selected) Stone950 else Stone200
+    val contentColor = if (enabled) Stone950 else Stone500
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(4.dp))
+            .clickable(enabled = enabled, onClick = onClick)
+            .background(background, RoundedCornerShape(4.dp))
+            .border(1.dp, border, RoundedCornerShape(4.dp))
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(text, color = contentColor, fontWeight = FontWeight.SemiBold)
+    }
+}
+
+@Composable
+private fun CheckoutOrderSummary(cartState: CartUiState, checkoutState: CheckoutUiState) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .background(SurfaceWarm, RoundedCornerShape(4.dp))
+            .border(1.dp, Stone200, RoundedCornerShape(4.dp))
+            .padding(18.dp)
+    ) {
+        Text("Order Summary", style = MaterialTheme.typography.headlineSmall)
+        Spacer(Modifier.height(12.dp))
+        if (cartState.cart.items.isEmpty()) {
+            Text("Your cart summary will appear here after adding flowers.", color = Stone500)
+        } else {
+            cartState.cart.items.forEach { item ->
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Column(Modifier.weight(1f)) {
+                        Text(item.productName, color = Stone950, fontWeight = FontWeight.SemiBold)
+                        Text("Qty ${item.quantity}", color = Stone500, style = MaterialTheme.typography.bodyMedium)
+                    }
+                    Text(CatalogFormatters.formatPeso(item.lineTotal), color = Stone950)
+                }
+                Spacer(Modifier.height(10.dp))
+            }
+        }
+        SummaryDivider()
+        SummaryRow("Subtotal", CatalogFormatters.formatPeso(cartState.cart.subtotal))
+        SummaryRow("Total", CatalogFormatters.formatPeso(cartState.cart.subtotal))
+        SummaryDivider()
+        SummaryTextBlock(
+            title = checkoutState.recipientName.trim().ifBlank { "Recipient" },
+            body = checkoutState.recipientAddress.trim().ifBlank { "Recipient address not set" }
+        )
+        Spacer(Modifier.height(12.dp))
+        SummaryTextBlock(
+            title = "Card Message",
+            body = checkoutState.cardMessage.trim().ifBlank { "No card message added." }
+        )
+        Spacer(Modifier.height(12.dp))
+        SummaryTextBlock(
+            title = "Delivery",
+            body = listOf(checkoutState.deliveryDateLabel, checkoutState.timeSlot)
+                .filter { it.isNotBlank() }
+                .joinToString(" - ")
+                .ifBlank { "Delivery schedule not selected." }
+        )
+    }
+}
+
+@Composable
+private fun SummaryRow(label: String, value: String) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Text(label, color = Stone500)
+        Text(value, color = Stone950, fontWeight = FontWeight.SemiBold)
+    }
+    Spacer(Modifier.height(8.dp))
+}
+
+@Composable
+private fun SummaryDivider() {
+    Spacer(
+        Modifier
+            .fillMaxWidth()
+            .height(1.dp)
+            .background(Stone200)
+    )
+    Spacer(Modifier.height(12.dp))
+}
+
+@Composable
+private fun SummaryTextBlock(title: String, body: String) {
+    Column(Modifier.fillMaxWidth()) {
+        Text(title, style = MaterialTheme.typography.titleLarge)
+        Spacer(Modifier.height(6.dp))
+        Text(body, color = Stone700, style = MaterialTheme.typography.bodyMedium)
     }
 }
 
