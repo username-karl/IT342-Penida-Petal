@@ -716,7 +716,7 @@ class CatalogViewModel(private val repository: CatalogRepository) : ViewModel() 
     private val _state = MutableStateFlow(CatalogUiState())
     val state: StateFlow<CatalogUiState> = _state.asStateFlow()
 
-    fun loadProducts(mood: String) {
+    fun loadProducts(mood: String? = null) {
         viewModelScope.launch {
             _state.update { it.copy(loading = true, error = null, selectedProduct = null) }
             repository.products(mood)

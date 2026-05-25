@@ -20,12 +20,18 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -96,6 +102,7 @@ private object Routes {
     const val Login = "login"
     const val Register = "register"
     const val Moods = "moods"
+    const val Browse = "browse"
     const val Products = "products/{mood}"
     const val Product = "product/{id}"
     const val Cart = "cart"
@@ -141,6 +148,13 @@ fun PetalApp() {
     val sessionViewModel: SessionViewModel = viewModel(
         factory = PetalViewModelFactory(sessionStore = container.sessionStore)
     )
+    fun navigateTopLevel(route: String) {
+        navController.navigate(route) {
+            popUpTo(Routes.Moods) { saveState = true }
+            launchSingleTop = true
+            restoreState = true
+        }
+    }
 
     PetalTheme {
         Surface(modifier = Modifier.fillMaxSize(), color = Paper) {
@@ -170,33 +184,71 @@ fun PetalApp() {
                     )
                 }
                 composable(Routes.Moods) {
-                    MoodGridScreen(
-                        displayName = sessionViewModel.displayName,
-                        onMood = { mood -> navController.navigate(Routes.products(mood)) },
-                        onAccount = if (sessionViewModel.isBuyer) {
-                            { navController.navigate(Routes.Account) }
-                        } else {
-                            null
-                        },
-                        onOrders = if (sessionViewModel.isBuyer) {
-                            { navController.navigate(Routes.OrderHistory) }
-                        } else {
-                            null
-                        },
-                        onLogout = {
-                            sessionViewModel.clear()
-                            navController.navigate(Routes.Login) {
-                                popUpTo(Routes.Moods) { inclusive = true }
+                    val content: @Composable () -> Unit = {
+                        MoodGridScreen(
+                            displayName = sessionViewModel.displayName,
+                            onMood = { mood -> navController.navigate(Routes.products(mood)) },
+                            onBrowse = { navigateTopLevel(Routes.Browse) },
+                            onCart = if (sessionViewModel.isBuyer) {
+                                { navigateTopLevel(Routes.Cart) }
+                            } else {
+                                null
+                            },
+                            onAccount = if (sessionViewModel.isBuyer) {
+                                { navigateTopLevel(Routes.Account) }
+                            } else {
+                                null
+                            },
+                            onOrders = if (sessionViewModel.isBuyer) {
+                                { navigateTopLevel(Routes.OrderHistory) }
+                            } else {
+                                null
+                            },
+                            onLogout = {
+                                sessionViewModel.clear()
+                                navController.navigate(Routes.Login) {
+                                    popUpTo(Routes.Moods) { inclusive = true }
+                                }
                             }
+                        )
+                    }
+                    if (sessionViewModel.isBuyer) {
+                        BuyerTopLevelScaffold(
+                            currentRoute = Routes.Moods,
+                            onNavigate = ::navigateTopLevel,
+                            content = content
+                        )
+                    } else {
+                        content()
+                    }
+                }
+                composable(Routes.Browse) {
+                    if (sessionViewModel.isBuyer) {
+                        BuyerTopLevelScaffold(
+                            currentRoute = Routes.Browse,
+                            onNavigate = ::navigateTopLevel
+                        ) {
+                            BrowseScreen(
+                                viewModel = catalogViewModel,
+                                onMood = { mood -> navController.navigate(Routes.products(mood)) },
+                                onProduct = { productId -> navController.navigate(Routes.product(productId)) }
+                            )
                         }
-                    )
+                    } else {
+                        BuyerAccessRequiredScreen(onBack = { navController.popBackStack() })
+                    }
                 }
                 composable(Routes.Account) {
                     if (sessionViewModel.isBuyer) {
-                        BuyerAccountScreen(
-                            viewModel = buyerAccountViewModel,
-                            onBack = { navController.popBackStack() }
-                        )
+                        BuyerTopLevelScaffold(
+                            currentRoute = Routes.Account,
+                            onNavigate = ::navigateTopLevel
+                        ) {
+                            BuyerAccountScreen(
+                                viewModel = buyerAccountViewModel,
+                                onBack = { navigateTopLevel(Routes.Moods) }
+                            )
+                        }
                     } else {
                         Column(Modifier.fillMaxSize().background(Paper)) {
                             PetalHeader(title = "Buyer Account", action = {
@@ -235,13 +287,22 @@ fun PetalApp() {
                     )
                 }
                 composable(Routes.Cart) {
-                    CartScreen(
-                        viewModel = cartViewModel,
-                        onBack = { navController.popBackStack() },
-                        onCheckout = { navController.navigate(Routes.CheckoutRecipient) },
-                        onProduct = { productId -> navController.navigate(Routes.product(productId)) },
-                        onBrowse = { navController.navigate(Routes.Moods) }
-                    )
+                    if (sessionViewModel.isBuyer) {
+                        BuyerTopLevelScaffold(
+                            currentRoute = Routes.Cart,
+                            onNavigate = ::navigateTopLevel
+                        ) {
+                            CartScreen(
+                                viewModel = cartViewModel,
+                                onBack = { navigateTopLevel(Routes.Moods) },
+                                onCheckout = { navController.navigate(Routes.CheckoutRecipient) },
+                                onProduct = { productId -> navController.navigate(Routes.product(productId)) },
+                                onBrowse = { navigateTopLevel(Routes.Browse) }
+                            )
+                        }
+                    } else {
+                        BuyerAccessRequiredScreen(onBack = { navController.popBackStack() })
+                    }
                 }
                 composable(Routes.CheckoutRecipient) {
                     CheckoutRecipientScreen(
@@ -289,12 +350,17 @@ fun PetalApp() {
                 }
                 composable(Routes.OrderHistory) {
                     if (sessionViewModel.isBuyer) {
-                        OrderHistoryScreen(
-                            viewModel = orderHistoryViewModel,
-                            onBack = { navController.popBackStack() },
-                            onOrder = { orderId -> navController.navigate(Routes.orderDetail(orderId)) },
-                            onBrowse = { navController.navigate(Routes.Moods) }
-                        )
+                        BuyerTopLevelScaffold(
+                            currentRoute = Routes.OrderHistory,
+                            onNavigate = ::navigateTopLevel
+                        ) {
+                            OrderHistoryScreen(
+                                viewModel = orderHistoryViewModel,
+                                onBack = { navigateTopLevel(Routes.Moods) },
+                                onOrder = { orderId -> navController.navigate(Routes.orderDetail(orderId)) },
+                                onBrowse = { navigateTopLevel(Routes.Browse) }
+                            )
+                        }
                     } else {
                         BuyerAccessRequiredScreen(onBack = { navController.popBackStack() })
                     }
@@ -423,47 +489,228 @@ private fun AuthScaffold(eyebrow: String, title: String, content: @Composable Co
     }
 }
 
+private data class BuyerTopLevelDestination(
+    val route: String,
+    val label: String,
+    val marker: String
+)
+
+private val BuyerTopLevelDestinations = listOf(
+    BuyerTopLevelDestination(Routes.Moods, "Home", "H"),
+    BuyerTopLevelDestination(Routes.Browse, "Browse", "B"),
+    BuyerTopLevelDestination(Routes.Cart, "Cart", "C"),
+    BuyerTopLevelDestination(Routes.OrderHistory, "Orders", "O"),
+    BuyerTopLevelDestination(Routes.Account, "Account", "A")
+)
+
+@Composable
+private fun BuyerTopLevelScaffold(
+    currentRoute: String,
+    onNavigate: (String) -> Unit,
+    content: @Composable () -> Unit
+) {
+    Scaffold(
+        containerColor = Paper,
+        bottomBar = {
+            NavigationBar(containerColor = Paper) {
+                BuyerTopLevelDestinations.forEach { destination ->
+                    NavigationBarItem(
+                        selected = currentRoute == destination.route,
+                        onClick = { onNavigate(destination.route) },
+                        icon = {
+                            Text(
+                                destination.marker,
+                                color = if (currentRoute == destination.route) Stone950 else Stone500,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        },
+                        label = { Text(destination.label) }
+                    )
+                }
+            }
+        }
+    ) { padding ->
+        Box(Modifier.fillMaxSize().padding(padding)) {
+            content()
+        }
+    }
+}
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun MoodGridScreen(
     displayName: String,
     onMood: (String) -> Unit,
+    onBrowse: () -> Unit,
+    onCart: (() -> Unit)?,
     onAccount: (() -> Unit)?,
     onOrders: (() -> Unit)?,
     onLogout: () -> Unit
 ) {
     Column(Modifier.fillMaxSize().background(Paper)) {
         PetalHeader(
-            title = "Mood Catalog",
+            title = "Buyer Home",
             subtitle = "Welcome, $displayName",
             action = {
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    onAccount?.let { PetalSecondaryButton("Account", it) }
-                    onOrders?.let { PetalSecondaryButton("Orders", it) }
-                    PetalSecondaryButton("Sign out", onLogout)
-                }
+                PetalSecondaryButton("Sign out", onLogout)
             }
         )
-        LazyVerticalGrid(
-            columns = GridCells.Adaptive(150.dp),
+        LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(20.dp),
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+            verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
-            items(PetalMoods) { mood ->
-                val tint = if (mood.value in listOf("romance", "apology")) BlushSoft else SageSoft
+            item {
                 Column(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(4.dp))
-                        .clickable { onMood(mood.value) }
-                        .background(tint)
-                        .border(1.dp, Stone200, RoundedCornerShape(4.dp))
-                        .padding(16.dp)
+                    Modifier
+                        .fillMaxWidth()
+                        .background(SageSoft, RoundedCornerShape(8.dp))
+                        .border(1.dp, Stone200, RoundedCornerShape(8.dp))
+                        .padding(18.dp)
                 ) {
-                    Text(mood.label, style = MaterialTheme.typography.headlineSmall)
+                    Text("Send flowers with less hunting around.", style = MaterialTheme.typography.displayMedium)
                     Spacer(Modifier.height(8.dp))
-                    Text(mood.note, color = Stone700, style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        "Browse arrangements, check your basket, and track gifts from the main tabs.",
+                        color = Stone700,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Spacer(Modifier.height(16.dp))
+                    PetalPrimaryButton("Browse Arrangements", onBrowse, Modifier.fillMaxWidth())
+                }
+            }
+            item {
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    onCart?.let { HomeShortcut("Cart", "Review basket", it) }
+                    onOrders?.let { HomeShortcut("Orders", "Track gifts", it) }
+                    onAccount?.let { HomeShortcut("Account", "Recipients and dates", it) }
+                }
+            }
+            item {
+                Text("Shop by mood", style = MaterialTheme.typography.headlineSmall)
+                Spacer(Modifier.height(4.dp))
+                Text("Choose the feeling first, then pick the arrangement.", color = Stone500)
+            }
+            items(PetalMoods) { mood ->
+                MoodHomeCard(mood = mood, onClick = { onMood(mood.value) })
+            }
+        }
+    }
+}
+
+@Composable
+private fun HomeShortcut(title: String, body: String, onClick: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .clip(RoundedCornerShape(4.dp))
+            .clickable(onClick = onClick)
+            .background(SurfaceWarm, RoundedCornerShape(4.dp))
+            .border(1.dp, Stone200, RoundedCornerShape(4.dp))
+            .padding(horizontal = 14.dp, vertical = 12.dp)
+    ) {
+        Text(title, color = Stone950, fontWeight = FontWeight.SemiBold)
+        Text(body, color = Stone500, style = MaterialTheme.typography.bodyMedium)
+    }
+}
+
+@Composable
+private fun MoodHomeCard(mood: com.petal.data.catalog.MoodOption, onClick: () -> Unit) {
+    val tint = if (mood.value in listOf("romance", "apology")) BlushSoft else SageSoft
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(4.dp))
+            .clickable(onClick = onClick)
+            .background(tint)
+            .border(1.dp, Stone200, RoundedCornerShape(4.dp))
+            .padding(16.dp)
+    ) {
+        Text(mood.label, style = MaterialTheme.typography.headlineSmall)
+        Spacer(Modifier.height(8.dp))
+        Text(mood.note, color = Stone700, style = MaterialTheme.typography.bodyMedium)
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun BrowseScreen(
+    viewModel: CatalogViewModel,
+    onMood: (String) -> Unit,
+    onProduct: (Long) -> Unit
+) {
+    val state by viewModel.state.collectAsState()
+    var query by rememberSaveable { mutableStateOf("") }
+    LaunchedEffect(Unit) {
+        viewModel.loadProducts()
+    }
+
+    val normalizedQuery = query.trim().lowercase(Locale.getDefault())
+    val filteredProducts = state.products.filter { product ->
+        normalizedQuery.isBlank() ||
+            product.name.contains(normalizedQuery, ignoreCase = true) ||
+            product.description.contains(normalizedQuery, ignoreCase = true) ||
+            product.floristName.orEmpty().contains(normalizedQuery, ignoreCase = true) ||
+            product.moodTags.any { tag -> tag.contains(normalizedQuery, ignoreCase = true) }
+    }
+
+    Column(Modifier.fillMaxSize().background(Paper)) {
+        PetalHeader(title = "Browse", subtitle = "Search local flower gifts")
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(20.dp),
+            verticalArrangement = Arrangement.spacedBy(18.dp)
+        ) {
+            item {
+                PetalTextField(
+                    label = "Search",
+                    value = query,
+                    onValueChange = { query = it },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+            item {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    PetalMoods.forEach { mood ->
+                        Column(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(999.dp))
+                                .clickable { onMood(mood.value) }
+                                .background(BlushSoft, RoundedCornerShape(999.dp))
+                                .padding(horizontal = 12.dp, vertical = 8.dp)
+                        ) {
+                            Text(mood.label, style = MaterialTheme.typography.labelSmall, color = Stone700)
+                        }
+                    }
+                }
+            }
+            when {
+                state.loading -> item { LoadingProductGrid() }
+                state.error != null -> item { ErrorBanner(state.error.orEmpty()) }
+                filteredProducts.isEmpty() -> item {
+                    EmptyPanel(
+                        title = if (query.isBlank()) "No arrangements found" else "No matches found",
+                        message = if (query.isBlank()) {
+                            "Petal could not load any available arrangements yet."
+                        } else {
+                            "Try another bouquet, florist, or mood search."
+                        }
+                    )
+                }
+                else -> {
+                    item {
+                        Text(
+                            "${filteredProducts.size} arrangement${if (filteredProducts.size == 1) "" else "s"} found",
+                            color = Stone500,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                    items(filteredProducts) { product ->
+                        ProductCard(product = product, onClick = { onProduct(product.id) })
+                    }
                 }
             }
         }

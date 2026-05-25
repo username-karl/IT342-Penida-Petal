@@ -3,7 +3,7 @@ package com.petal.data.catalog
 import com.petal.core.network.ApiService
 
 class CatalogRepository(private val apiService: ApiService) {
-    suspend fun products(mood: String): Result<List<ProductResponse>> {
+    suspend fun products(mood: String? = null): Result<List<ProductResponse>> {
         return try {
             val response = apiService.products(mood)
             val body = response.body()
