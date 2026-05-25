@@ -62,7 +62,23 @@ function normalizeSavedDate(savedDate) {
         label: savedDate.label || 'Important date',
         eventDate: savedDate.eventDate,
         recurring: savedDate.recurring ?? savedDate.isRecurring ?? false,
+        notifiedYear: savedDate.notifiedYear,
+        nextOccurrenceDate: savedDate.nextOccurrenceDate,
+        reminderDate: savedDate.reminderDate,
+        reminderDue: Boolean(savedDate.reminderDue),
+        reminderSentForYear: Boolean(savedDate.reminderSentForYear),
     };
+}
+
+function reminderStatus(savedDate) {
+    if (savedDate.reminderDue) return 'Reminder due today';
+    if (savedDate.reminderSentForYear && savedDate.notifiedYear) {
+        return `Reminder logged for ${savedDate.notifiedYear}`;
+    }
+    if (savedDate.reminderDate) {
+        return `Reminder scheduled for ${formatSavedDate(savedDate.reminderDate)}`;
+    }
+    return 'Reminder scheduled';
 }
 
 const RECENT_ORDER_LIMIT = 3;
@@ -818,6 +834,30 @@ export default function Profile() {
                                             <Bell size={14} /> Add reminder
                                         </button>
                                     </div>
+
+                                    {savedDates.length > 0 && (
+                                        <div className="mt-4 space-y-2">
+                                            {savedDates.slice(0, 3).map((savedDate) => (
+                                                <div
+                                                    key={savedDate.id || `${savedDate.label}-${savedDate.eventDate}`}
+                                                    className="border border-stone-200 bg-[#FDFCF8] px-3 py-3"
+                                                >
+                                                    <div className="flex items-start justify-between gap-3">
+                                                        <div>
+                                                            <p className="text-sm font-medium text-stone-900">{savedDate.label}</p>
+                                                            <p className="mt-0.5 text-xs text-stone-500">
+                                                                {formatSavedDate(savedDate.eventDate)} / {savedDate.recurring ? 'Yearly' : 'One-time'}
+                                                            </p>
+                                                        </div>
+                                                        <span className="shrink-0 border border-stone-200 bg-white px-2 py-1 text-[10px] font-medium uppercase tracking-widest text-stone-500">
+                                                            {savedDate.reminderDue ? 'Due' : 'Scheduled'}
+                                                        </span>
+                                                    </div>
+                                                    <p className="mt-2 text-xs text-stone-600">{reminderStatus(savedDate)}</p>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
                             )}
 

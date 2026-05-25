@@ -17,4 +17,8 @@ public class SavedDateResponse {
     private LocalDate eventDate;
     private boolean recurring;
     private Integer notifiedYear;
+    private LocalDate nextOccurrenceDate;
+    private LocalDate reminderDate;
+    private boolean reminderDue;
+    private boolean reminderSentForYear;
 }

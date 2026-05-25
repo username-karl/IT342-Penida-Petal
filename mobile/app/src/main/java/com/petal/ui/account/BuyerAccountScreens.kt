@@ -26,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.petal.data.account.DeliveryAddressResponse
+import com.petal.data.account.SavedDateReminderFormatters
 import com.petal.data.account.SavedDateResponse
 import com.petal.ui.BuyerAccountViewModel
 import com.petal.ui.BuyerAccountUiState
@@ -256,5 +257,11 @@ private fun SavedDateCard(savedDate: SavedDateResponse) {
         }
         Spacer(Modifier.height(6.dp))
         Text(savedDate.eventDate ?: "Date not provided", color = Stone700)
+        Spacer(Modifier.height(4.dp))
+        Text(
+            SavedDateReminderFormatters.statusText(savedDate),
+            color = Stone500,
+            style = MaterialTheme.typography.bodyMedium
+        )
     }
 }

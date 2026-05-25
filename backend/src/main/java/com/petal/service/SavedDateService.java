@@ -12,6 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.LocalDate;
+import java.time.YearMonth;
 import java.util.List;
 
 @Service
@@ -58,12 +59,41 @@ public class SavedDateService {
     }
 
     private SavedDateResponse toResponse(SavedDate savedDate) {
+        LocalDate today = LocalDate.now(clock);
+        LocalDate nextOccurrenceDate = nextOccurrenceDate(savedDate, today);
+        LocalDate reminderDate = nextOccurrenceDate.minusDays(3);
+        boolean reminderSentForYear = savedDate.getNotifiedYear() != null
+                && savedDate.getNotifiedYear().equals(nextOccurrenceDate.getYear());
+        boolean reminderDue = today.equals(reminderDate) && !reminderSentForYear;
+
         return SavedDateResponse.builder()
                 .id(savedDate.getId())
                 .label(savedDate.getLabel())
                 .eventDate(savedDate.getEventDate())
                 .recurring(savedDate.isRecurring())
                 .notifiedYear(savedDate.getNotifiedYear())
+                .nextOccurrenceDate(nextOccurrenceDate)
+                .reminderDate(reminderDate)
+                .reminderDue(reminderDue)
+                .reminderSentForYear(reminderSentForYear)
                 .build();
+    }
+
+    private LocalDate nextOccurrenceDate(SavedDate savedDate, LocalDate today) {
+        if (!savedDate.isRecurring()) {
+            return savedDate.getEventDate();
+        }
+
+        LocalDate thisYear = occurrenceInYear(savedDate.getEventDate(), today.getYear());
+        if (!thisYear.isBefore(today)) {
+            return thisYear;
+        }
+        return occurrenceInYear(savedDate.getEventDate(), today.getYear() + 1);
+    }
+
+    private LocalDate occurrenceInYear(LocalDate eventDate, int year) {
+        YearMonth yearMonth = YearMonth.of(year, eventDate.getMonth());
+        int day = Math.min(eventDate.getDayOfMonth(), yearMonth.lengthOfMonth());
+        return LocalDate.of(year, eventDate.getMonth(), day);
     }
 }

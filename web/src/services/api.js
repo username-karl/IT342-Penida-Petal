@@ -86,7 +86,6 @@ export const addressesAPI = {
 export const savedDatesAPI = {
     getSavedDates: () => api.get('/users/dates'),
     createSavedDate: (data) => api.post('/users/dates', data),
-    deleteSavedDate: (id) => api.delete(`/users/dates/${id}`),
 };
 
 export const slotsAPI = {

@@ -6,6 +6,7 @@ import com.petal.entity.SavedDate;
 import com.petal.entity.User;
 import com.petal.exception.ForbiddenException;
 import com.petal.repository.SavedDateRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -35,6 +36,11 @@ class SavedDateServiceTest {
     @InjectMocks
     private SavedDateService savedDateService;
 
+    @BeforeEach
+    void setDefaultClock() {
+        setClock(LocalDate.of(2026, 5, 20));
+    }
+
     @Test
     void createSavedDateTrimsLabelAndStoresAuthenticatedBuyerOwner() {
         User buyer = buyer();
@@ -54,6 +60,97 @@ class SavedDateServiceTest {
         assertThat(captor.getValue().getEventDate()).isEqualTo(LocalDate.of(1990, 2, 14));
         assertThat(captor.getValue().isRecurring()).isTrue();
         assertThat(response.getId()).isEqualTo(12L);
+    }
+
+    @Test
+    void responseIncludesReminderMetadataForUpcomingOneTimeDate() {
+        User buyer = buyer();
+        Mockito.when(savedDateRepository.findByUserOrderByEventDateAscIdAsc(buyer))
+                .thenReturn(List.of(savedDate(buyer, "Anniversary", LocalDate.of(2026, 5, 24), false, null)));
+
+        SavedDateResponse response = savedDateService.getSavedDates(buyer).get(0);
+
+        assertThat(response.getNextOccurrenceDate()).isEqualTo(LocalDate.of(2026, 5, 24));
+        assertThat(response.getReminderDate()).isEqualTo(LocalDate.of(2026, 5, 21));
+        assertThat(response.isReminderDue()).isFalse();
+        assertThat(response.isReminderSentForYear()).isFalse();
+    }
+
+    @Test
+    void responseMarksReminderDueWhenTodayIsThreeDaysBeforeEvent() {
+        User buyer = buyer();
+        Mockito.when(savedDateRepository.findByUserOrderByEventDateAscIdAsc(buyer))
+                .thenReturn(List.of(savedDate(buyer, "Anniversary", LocalDate.of(2026, 5, 23), false, null)));
+
+        SavedDateResponse response = savedDateService.getSavedDates(buyer).get(0);
+
+        assertThat(response.getReminderDate()).isEqualTo(LocalDate.of(2026, 5, 20));
+        assertThat(response.isReminderDue()).isTrue();
+        assertThat(response.isReminderSentForYear()).isFalse();
+    }
+
+    @Test
+    void responseMarksReminderSentForMatchingNotifiedYear() {
+        User buyer = buyer();
+        Mockito.when(savedDateRepository.findByUserOrderByEventDateAscIdAsc(buyer))
+                .thenReturn(List.of(savedDate(buyer, "Anniversary", LocalDate.of(2026, 5, 23), false, 2026)));
+
+        SavedDateResponse response = savedDateService.getSavedDates(buyer).get(0);
+
+        assertThat(response.isReminderDue()).isFalse();
+        assertThat(response.isReminderSentForYear()).isTrue();
+    }
+
+    @Test
+    void recurringDateUsesNextOccurrenceInTheCurrentYearWhenUpcoming() {
+        User buyer = buyer();
+        Mockito.when(savedDateRepository.findByUserOrderByEventDateAscIdAsc(buyer))
+                .thenReturn(List.of(savedDate(buyer, "Birthday", LocalDate.of(1990, 5, 25), true, null)));
+
+        SavedDateResponse response = savedDateService.getSavedDates(buyer).get(0);
+
+        assertThat(response.getNextOccurrenceDate()).isEqualTo(LocalDate.of(2026, 5, 25));
+        assertThat(response.getReminderDate()).isEqualTo(LocalDate.of(2026, 5, 22));
+    }
+
+    @Test
+    void recurringDateUsesNextYearWhenCurrentYearOccurrencePassed() {
+        User buyer = buyer();
+        Mockito.when(savedDateRepository.findByUserOrderByEventDateAscIdAsc(buyer))
+                .thenReturn(List.of(savedDate(buyer, "Birthday", LocalDate.of(1990, 5, 19), true, null)));
+
+        SavedDateResponse response = savedDateService.getSavedDates(buyer).get(0);
+
+        assertThat(response.getNextOccurrenceDate()).isEqualTo(LocalDate.of(2027, 5, 19));
+        assertThat(response.getReminderDate()).isEqualTo(LocalDate.of(2027, 5, 16));
+    }
+
+    @Test
+    void recurringDateHandlesReminderAcrossYearBoundary() {
+        setClock(LocalDate.of(2026, 12, 29));
+        User buyer = buyer();
+        Mockito.when(savedDateRepository.findByUserOrderByEventDateAscIdAsc(buyer))
+                .thenReturn(List.of(savedDate(buyer, "New Year Birthday", LocalDate.of(1990, 1, 1), true, null)));
+
+        SavedDateResponse response = savedDateService.getSavedDates(buyer).get(0);
+
+        assertThat(response.getNextOccurrenceDate()).isEqualTo(LocalDate.of(2027, 1, 1));
+        assertThat(response.getReminderDate()).isEqualTo(LocalDate.of(2026, 12, 29));
+        assertThat(response.isReminderDue()).isTrue();
+    }
+
+    @Test
+    void recurringLeapDayUsesLastValidDayInNonLeapYears() {
+        setClock(LocalDate.of(2027, 2, 25));
+        User buyer = buyer();
+        Mockito.when(savedDateRepository.findByUserOrderByEventDateAscIdAsc(buyer))
+                .thenReturn(List.of(savedDate(buyer, "Leap Day Birthday", LocalDate.of(2024, 2, 29), true, null)));
+
+        SavedDateResponse response = savedDateService.getSavedDates(buyer).get(0);
+
+        assertThat(response.getNextOccurrenceDate()).isEqualTo(LocalDate.of(2027, 2, 28));
+        assertThat(response.getReminderDate()).isEqualTo(LocalDate.of(2027, 2, 25));
+        assertThat(response.isReminderDue()).isTrue();
     }
 
     @Test
@@ -109,8 +206,8 @@ class SavedDateServiceTest {
 
     private void setClock(LocalDate today) {
         ZoneId zone = ZoneId.of("Asia/Manila");
-        Mockito.when(clock.instant()).thenReturn(today.atStartOfDay(zone).toInstant());
-        Mockito.when(clock.getZone()).thenReturn(zone);
+        Mockito.lenient().when(clock.instant()).thenReturn(today.atStartOfDay(zone).toInstant());
+        Mockito.lenient().when(clock.getZone()).thenReturn(zone);
     }
 
     private SavedDateRequest request(String label, LocalDate eventDate, Boolean recurring) {

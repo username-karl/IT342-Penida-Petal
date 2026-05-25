@@ -63,7 +63,11 @@ class SavedDateControllerTest {
                 .andExpect(jsonPath("$.success", is(true)))
                 .andExpect(jsonPath("$.message", is("Date saved.")))
                 .andExpect(jsonPath("$.data.label", is("Mom's Birthday")))
-                .andExpect(jsonPath("$.data.recurring", is(true)));
+                .andExpect(jsonPath("$.data.recurring", is(true)))
+                .andExpect(jsonPath("$.data.nextOccurrenceDate", is("2026-02-14")))
+                .andExpect(jsonPath("$.data.reminderDate", is("2026-02-11")))
+                .andExpect(jsonPath("$.data.reminderDue", is(false)))
+                .andExpect(jsonPath("$.data.reminderSentForYear", is(false)));
     }
 
     @Test
@@ -76,7 +80,11 @@ class SavedDateControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success", is(true)))
                 .andExpect(jsonPath("$.data", hasSize(1)))
-                .andExpect(jsonPath("$.data[0].label", is("Mom's Birthday")));
+                .andExpect(jsonPath("$.data[0].label", is("Mom's Birthday")))
+                .andExpect(jsonPath("$.data[0].nextOccurrenceDate", is("2026-02-14")))
+                .andExpect(jsonPath("$.data[0].reminderDate", is("2026-02-11")))
+                .andExpect(jsonPath("$.data[0].reminderDue", is(false)))
+                .andExpect(jsonPath("$.data[0].reminderSentForYear", is(false)));
     }
 
     @Test
@@ -185,6 +193,10 @@ class SavedDateControllerTest {
                 .label("Mom's Birthday")
                 .eventDate(LocalDate.of(1990, 2, 14))
                 .recurring(true)
+                .nextOccurrenceDate(LocalDate.of(2026, 2, 14))
+                .reminderDate(LocalDate.of(2026, 2, 11))
+                .reminderDue(false)
+                .reminderSentForYear(false)
                 .build();
     }
 }

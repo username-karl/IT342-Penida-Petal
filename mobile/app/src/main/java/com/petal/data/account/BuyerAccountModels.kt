@@ -28,5 +28,9 @@ data class SavedDateResponse(
     val label: String?,
     val eventDate: String?,
     val recurring: Boolean,
-    val notifiedYear: Int?
+    val notifiedYear: Int?,
+    val nextOccurrenceDate: String?,
+    val reminderDate: String?,
+    val reminderDue: Boolean,
+    val reminderSentForYear: Boolean
 )
