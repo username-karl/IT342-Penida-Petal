@@ -4,6 +4,10 @@ import com.petal.data.auth.ApiResponse
 import com.petal.data.auth.AuthResponse
 import com.petal.data.auth.LoginRequest
 import com.petal.data.auth.RegisterRequest
+import com.petal.data.account.DeliveryAddressRequest
+import com.petal.data.account.DeliveryAddressResponse
+import com.petal.data.account.SavedDateRequest
+import com.petal.data.account.SavedDateResponse
 import com.petal.data.cart.AddCartItemRequest
 import com.petal.data.cart.CartItemResponse
 import com.petal.data.cart.CartResponse
@@ -64,4 +68,25 @@ interface ApiService {
 
     @GET("/api/orders/{id}")
     suspend fun order(@Path("id") id: Long): Response<ApiResponse<BuyerOrderResponse>>
+
+    @GET("/api/addresses")
+    suspend fun addresses(): Response<ApiResponse<List<DeliveryAddressResponse>>>
+
+    @POST("/api/addresses")
+    suspend fun createAddress(@Body request: DeliveryAddressRequest): Response<ApiResponse<DeliveryAddressResponse>>
+
+    @PUT("/api/addresses/{id}")
+    suspend fun updateAddress(
+        @Path("id") id: Long,
+        @Body request: DeliveryAddressRequest
+    ): Response<ApiResponse<DeliveryAddressResponse>>
+
+    @DELETE("/api/addresses/{id}")
+    suspend fun deleteAddress(@Path("id") id: Long): Response<ApiResponse<Void>>
+
+    @GET("/api/users/dates")
+    suspend fun savedDates(): Response<ApiResponse<List<SavedDateResponse>>>
+
+    @POST("/api/users/dates")
+    suspend fun createSavedDate(@Body request: SavedDateRequest): Response<ApiResponse<SavedDateResponse>>
 }

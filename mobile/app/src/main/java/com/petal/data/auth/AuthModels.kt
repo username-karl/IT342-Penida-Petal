@@ -55,3 +55,12 @@ object AuthFormValidator {
         }
     }
 }
+
+object BuyerRolePolicy {
+    fun isBuyer(role: String?): Boolean {
+        return when (role?.trim()?.uppercase()) {
+            "BUYER", "ROLE_BUYER" -> true
+            else -> false
+        }
+    }
+}

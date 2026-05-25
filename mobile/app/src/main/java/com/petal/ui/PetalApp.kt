@@ -36,6 +36,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.petal.PetalApplication
+import com.petal.data.account.DeliveryAddressResponse
 import com.petal.data.cart.CartItemResponse
 import com.petal.data.catalog.CatalogFormatters
 import com.petal.data.catalog.PetalMoods
@@ -57,6 +58,7 @@ import com.petal.ui.components.PetalSecondaryButton
 import com.petal.ui.components.PetalTextField
 import com.petal.ui.components.ProductCard
 import com.petal.ui.components.SuccessBanner
+import com.petal.ui.account.BuyerAccountScreen
 import com.petal.ui.theme.BlushSoft
 import com.petal.ui.theme.Paper
 import com.petal.ui.theme.PetalTheme
@@ -91,6 +93,7 @@ private object Routes {
     const val Products = "products/{mood}"
     const val Product = "product/{id}"
     const val Cart = "cart"
+    const val Account = "account"
     const val CheckoutRecipient = "checkout/recipient"
     const val CheckoutCardMessage = "checkout/card-message"
     const val CheckoutSchedulePay = "checkout/schedule-pay"
@@ -118,10 +121,16 @@ fun PetalApp() {
         factory = PetalViewModelFactory(cartRepository = container.cartRepository)
     )
     val checkoutViewModel: CheckoutViewModel = viewModel(
-        factory = PetalViewModelFactory(checkoutRepository = container.checkoutRepository)
+        factory = PetalViewModelFactory(
+            checkoutRepository = container.checkoutRepository,
+            buyerAccountRepository = container.buyerAccountRepository
+        )
     )
     val orderHistoryViewModel: OrderHistoryViewModel = viewModel(
         factory = PetalViewModelFactory(orderRepository = container.orderRepository)
+    )
+    val buyerAccountViewModel: BuyerAccountViewModel = viewModel(
+        factory = PetalViewModelFactory(buyerAccountRepository = container.buyerAccountRepository)
     )
     val sessionViewModel: SessionViewModel = viewModel(
         factory = PetalViewModelFactory(sessionStore = container.sessionStore)
@@ -158,6 +167,11 @@ fun PetalApp() {
                     MoodGridScreen(
                         displayName = sessionViewModel.displayName,
                         onMood = { mood -> navController.navigate(Routes.products(mood)) },
+                        onAccount = if (sessionViewModel.isBuyer) {
+                            { navController.navigate(Routes.Account) }
+                        } else {
+                            null
+                        },
                         onOrders = { navController.navigate(Routes.OrderHistory) },
                         onLogout = {
                             sessionViewModel.clear()
@@ -166,6 +180,25 @@ fun PetalApp() {
                             }
                         }
                     )
+                }
+                composable(Routes.Account) {
+                    if (sessionViewModel.isBuyer) {
+                        BuyerAccountScreen(
+                            viewModel = buyerAccountViewModel,
+                            onBack = { navController.popBackStack() }
+                        )
+                    } else {
+                        Column(Modifier.fillMaxSize().background(Paper)) {
+                            PetalHeader(title = "Buyer Account", action = {
+                                PetalSecondaryButton("Back", onClick = { navController.popBackStack() })
+                            })
+                            EmptyPanel(
+                                title = "Buyer access required",
+                                message = "Recipient and reminder tools are available for buyer accounts.",
+                                modifier = Modifier.padding(20.dp)
+                            )
+                        }
+                    }
                 }
                 composable(
                     route = Routes.Products,
@@ -358,10 +391,12 @@ private fun AuthScaffold(eyebrow: String, title: String, content: @Composable Co
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun MoodGridScreen(
     displayName: String,
     onMood: (String) -> Unit,
+    onAccount: (() -> Unit)?,
     onOrders: () -> Unit,
     onLogout: () -> Unit
 ) {
@@ -370,7 +405,8 @@ private fun MoodGridScreen(
             title = "Mood Catalog",
             subtitle = "Welcome, $displayName",
             action = {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    onAccount?.let { PetalSecondaryButton("Account", it) }
                     PetalSecondaryButton("Orders", onOrders)
                     PetalSecondaryButton("Sign out", onLogout)
                 }
@@ -696,6 +732,9 @@ private fun CartItemCard(
 @Composable
 private fun CheckoutRecipientScreen(viewModel: CheckoutViewModel, onBack: () -> Unit, onNext: () -> Unit) {
     val state by viewModel.state.collectAsState()
+    LaunchedEffect(Unit) {
+        viewModel.loadSavedAddresses()
+    }
 
     Column(Modifier.fillMaxSize().background(Paper)) {
         PetalHeader(title = "Checkout", subtitle = "Step 1 of 3", action = {
@@ -716,6 +755,13 @@ private fun CheckoutRecipientScreen(viewModel: CheckoutViewModel, onBack: () -> 
                     .border(1.dp, Stone200, RoundedCornerShape(4.dp))
                     .padding(18.dp)
             ) {
+                SavedAddressSelector(
+                    addresses = state.savedAddresses,
+                    loading = state.savedAddressesLoading,
+                    error = state.savedAddressesError,
+                    selectedAddressId = state.selectedAddressId,
+                    onAddress = viewModel::selectSavedAddress
+                )
                 PetalTextField("Recipient Name", state.recipientName, viewModel::setRecipientName)
                 Spacer(Modifier.height(16.dp))
                 PetalTextField(
@@ -740,6 +786,52 @@ private fun CheckoutRecipientScreen(viewModel: CheckoutViewModel, onBack: () -> 
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun SavedAddressSelector(
+    addresses: List<DeliveryAddressResponse>,
+    loading: Boolean,
+    error: String?,
+    selectedAddressId: Long?,
+    onAddress: (DeliveryAddressResponse) -> Unit
+) {
+    if (loading) {
+        Text("Loading saved recipients...", color = Stone500, style = MaterialTheme.typography.bodyMedium)
+        Spacer(Modifier.height(12.dp))
+    }
+    error?.let {
+        Text(it, color = Stone500, style = MaterialTheme.typography.bodyMedium)
+        Spacer(Modifier.height(12.dp))
+    }
+    if (addresses.isNotEmpty()) {
+        Text("Choose from address book", style = MaterialTheme.typography.headlineSmall)
+        Spacer(Modifier.height(10.dp))
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            addresses.forEach { address ->
+                val selected = selectedAddressId == address.id
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(4.dp))
+                        .clickable { onAddress(address) }
+                        .background(if (selected) SageSoft else Paper, RoundedCornerShape(4.dp))
+                        .border(1.dp, if (selected) Stone950 else Stone200, RoundedCornerShape(4.dp))
+                        .padding(12.dp)
+                ) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text(address.label ?: "Recipient", color = Stone950, fontWeight = FontWeight.SemiBold)
+                        if (address.defaultAddress) {
+                            Text("Default", color = Stone700, style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
+                    Text(address.recipientName ?: "Recipient", color = Stone700, style = MaterialTheme.typography.bodyMedium)
+                    Text(address.addressLine ?: "Address not provided", color = Stone500, style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+        }
+        Spacer(Modifier.height(16.dp))
     }
 }
 

@@ -3,9 +3,16 @@ package com.petal.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.petal.data.account.BuyerAccountRepository
+import com.petal.data.account.BuyerAccountValidators
+import com.petal.data.account.DeliveryAddressRequest
+import com.petal.data.account.DeliveryAddressResponse
+import com.petal.data.account.SavedDateRequest
+import com.petal.data.account.SavedDateResponse
 import com.petal.core.session.SessionStore
 import com.petal.data.auth.AuthFormValidator
 import com.petal.data.auth.AuthRepository
+import com.petal.data.auth.BuyerRolePolicy
 import com.petal.data.cart.CartItemResponse
 import com.petal.data.cart.CartRepository
 import com.petal.data.cart.CartResponse
@@ -189,6 +196,10 @@ class CartViewModel(private val repository: CartRepository) : ViewModel() {
 data class CheckoutUiState(
     val recipientName: String = "",
     val recipientAddress: String = "",
+    val savedAddresses: List<DeliveryAddressResponse> = emptyList(),
+    val savedAddressesLoading: Boolean = false,
+    val savedAddressesError: String? = null,
+    val selectedAddressId: Long? = null,
     val cardMessage: String = "",
     val deliveryEpochDay: Long? = null,
     val deliveryDateLabel: String = "",
@@ -219,7 +230,31 @@ data class OrderConfirmationUiState(
     val recipientAddress: String
 )
 
-class CheckoutViewModel(private val repository: CheckoutRepository? = null) : ViewModel() {
+data class BuyerAccountUiState(
+    val addressesLoading: Boolean = false,
+    val datesLoading: Boolean = false,
+    val addressActionLoading: Boolean = false,
+    val dateActionLoading: Boolean = false,
+    val addresses: List<DeliveryAddressResponse> = emptyList(),
+    val savedDates: List<SavedDateResponse> = emptyList(),
+    val addressesError: String? = null,
+    val datesError: String? = null,
+    val addressSuccess: String? = null,
+    val dateSuccess: String? = null,
+    val addressLabel: String = "Home",
+    val addressRecipientName: String = "",
+    val addressPhoneNumber: String = "",
+    val addressLine: String = "",
+    val addressDefault: Boolean = false,
+    val savedDateLabel: String = "",
+    val savedDateEventDate: String = "",
+    val savedDateRecurring: Boolean = true
+)
+
+class CheckoutViewModel(
+    private val repository: CheckoutRepository? = null,
+    private val accountRepository: BuyerAccountRepository? = null
+) : ViewModel() {
     companion object {
         const val mockPaymentMethod = "CARD"
     }
@@ -227,9 +262,54 @@ class CheckoutViewModel(private val repository: CheckoutRepository? = null) : Vi
     private val _state = MutableStateFlow(CheckoutUiState())
     val state: StateFlow<CheckoutUiState> = _state.asStateFlow()
 
-    fun setRecipientName(value: String) = _state.update { it.copy(recipientName = value, error = null) }
+    fun setRecipientName(value: String) = _state.update {
+        it.copy(recipientName = value, selectedAddressId = null, error = null)
+    }
 
-    fun setRecipientAddress(value: String) = _state.update { it.copy(recipientAddress = value, error = null) }
+    fun setRecipientAddress(value: String) = _state.update {
+        it.copy(recipientAddress = value, selectedAddressId = null, error = null)
+    }
+
+    fun selectSavedAddress(address: DeliveryAddressResponse) = _state.update {
+        it.copy(
+            recipientName = address.recipientName.orEmpty(),
+            recipientAddress = address.addressLine.orEmpty(),
+            selectedAddressId = address.id,
+            error = null
+        )
+    }
+
+    fun loadSavedAddresses() {
+        val repository = accountRepository ?: return
+        if (_state.value.savedAddressesLoading) return
+
+        viewModelScope.launch {
+            _state.update { it.copy(savedAddressesLoading = true, savedAddressesError = null) }
+            repository.addresses()
+                .onSuccess { addresses ->
+                    _state.update {
+                        val defaultAddress = addresses.firstOrNull { address -> address.defaultAddress }
+                        val shouldApplyDefault = it.recipientName.isBlank() && it.recipientAddress.isBlank() && defaultAddress != null
+                        it.copy(
+                            savedAddressesLoading = false,
+                            savedAddresses = addresses,
+                            savedAddressesError = null,
+                            recipientName = if (shouldApplyDefault) defaultAddress?.recipientName.orEmpty() else it.recipientName,
+                            recipientAddress = if (shouldApplyDefault) defaultAddress?.addressLine.orEmpty() else it.recipientAddress,
+                            selectedAddressId = if (shouldApplyDefault) defaultAddress?.id else it.selectedAddressId
+                        )
+                    }
+                }
+                .onFailure { failure ->
+                    _state.update {
+                        it.copy(
+                            savedAddressesLoading = false,
+                            savedAddressesError = failure.message ?: "Unable to load saved addresses."
+                        )
+                    }
+                }
+        }
+    }
 
     fun setCardMessage(value: String) = _state.update {
         it.copy(
@@ -390,6 +470,201 @@ class CheckoutViewModel(private val repository: CheckoutRepository? = null) : Vi
     }
 }
 
+class BuyerAccountViewModel(private val repository: BuyerAccountRepository) : ViewModel() {
+    private val _state = MutableStateFlow(BuyerAccountUiState())
+    val state: StateFlow<BuyerAccountUiState> = _state.asStateFlow()
+
+    fun load() {
+        loadAddresses()
+        loadSavedDates()
+    }
+
+    fun setAddressLabel(value: String) = _state.update { it.copy(addressLabel = value, addressesError = null) }
+    fun setAddressRecipientName(value: String) = _state.update { it.copy(addressRecipientName = value, addressesError = null) }
+    fun setAddressPhoneNumber(value: String) = _state.update { it.copy(addressPhoneNumber = value, addressesError = null) }
+    fun setAddressLine(value: String) = _state.update { it.copy(addressLine = value, addressesError = null) }
+    fun setAddressDefault(value: Boolean) = _state.update { it.copy(addressDefault = value, addressesError = null) }
+    fun setSavedDateLabel(value: String) = _state.update { it.copy(savedDateLabel = value, datesError = null) }
+    fun setSavedDateEventDate(value: String) = _state.update { it.copy(savedDateEventDate = value, datesError = null) }
+    fun setSavedDateRecurring(value: Boolean) = _state.update { it.copy(savedDateRecurring = value, datesError = null) }
+    fun clearMessages() = _state.update { it.copy(addressesError = null, datesError = null, addressSuccess = null, dateSuccess = null) }
+
+    fun loadAddresses() {
+        viewModelScope.launch {
+            _state.update { it.copy(addressesLoading = true, addressesError = null) }
+            repository.addresses()
+                .onSuccess { addresses -> _state.update { it.copy(addressesLoading = false, addresses = addresses) } }
+                .onFailure { failure ->
+                    _state.update { it.copy(addressesLoading = false, addressesError = failure.message ?: "Unable to load saved addresses.") }
+                }
+        }
+    }
+
+    fun loadSavedDates() {
+        viewModelScope.launch {
+            _state.update { it.copy(datesLoading = true, datesError = null) }
+            repository.savedDates()
+                .onSuccess { savedDates -> _state.update { it.copy(datesLoading = false, savedDates = savedDates) } }
+                .onFailure { failure ->
+                    _state.update { it.copy(datesLoading = false, datesError = failure.message ?: "Unable to load important dates.") }
+                }
+        }
+    }
+
+    fun saveAddress() {
+        val current = _state.value
+        BuyerAccountValidators.validateAddress(
+            current.addressLabel,
+            current.addressRecipientName,
+            current.addressLine
+        )?.let { error ->
+            _state.update { it.copy(addressesError = error, addressSuccess = null) }
+            return
+        }
+
+        val request = DeliveryAddressRequest(
+            label = current.addressLabel.trim(),
+            recipientName = current.addressRecipientName.trim(),
+            phoneNumber = current.addressPhoneNumber.trim().ifBlank { null },
+            addressLine = current.addressLine.trim(),
+            defaultAddress = current.addressDefault
+        )
+
+        viewModelScope.launch {
+            _state.update { it.copy(addressActionLoading = true, addressesError = null, addressSuccess = null) }
+            repository.createAddress(request)
+                .onSuccess { address ->
+                    _state.update { state ->
+                        val existing = if (address.defaultAddress) {
+                            state.addresses.map { it.copy(defaultAddress = false) }
+                        } else {
+                            state.addresses
+                        }
+                        state.copy(
+                            addressActionLoading = false,
+                            addresses = listOf(address) + existing,
+                            addressSuccess = "${address.label ?: "Recipient"} saved.",
+                            addressLabel = "Home",
+                            addressRecipientName = "",
+                            addressPhoneNumber = "",
+                            addressLine = "",
+                            addressDefault = false
+                        )
+                    }
+                }
+                .onFailure { failure ->
+                    _state.update {
+                        it.copy(
+                            addressActionLoading = false,
+                            addressesError = failure.message ?: "Unable to save address."
+                        )
+                    }
+                }
+        }
+    }
+
+    fun makeDefaultAddress(address: DeliveryAddressResponse) {
+        val request = DeliveryAddressRequest(
+            label = address.label.orEmpty(),
+            recipientName = address.recipientName.orEmpty(),
+            phoneNumber = address.phoneNumber,
+            addressLine = address.addressLine.orEmpty(),
+            defaultAddress = true
+        )
+
+        viewModelScope.launch {
+            _state.update { it.copy(addressActionLoading = true, addressesError = null, addressSuccess = null) }
+            repository.updateAddress(address.id, request)
+                .onSuccess { updated ->
+                    _state.update { state ->
+                        state.copy(
+                            addressActionLoading = false,
+                            addresses = state.addresses.map { item ->
+                                if (item.id == updated.id) updated else item.copy(defaultAddress = false)
+                            },
+                            addressSuccess = "${updated.label ?: "Recipient"} is now default."
+                        )
+                    }
+                }
+                .onFailure { failure ->
+                    _state.update {
+                        it.copy(
+                            addressActionLoading = false,
+                            addressesError = failure.message ?: "Unable to update address."
+                        )
+                    }
+                }
+        }
+    }
+
+    fun deleteAddress(id: Long) {
+        viewModelScope.launch {
+            _state.update { it.copy(addressActionLoading = true, addressesError = null, addressSuccess = null) }
+            repository.deleteAddress(id)
+                .onSuccess {
+                    _state.update { state ->
+                        state.copy(
+                            addressActionLoading = false,
+                            addresses = state.addresses.filterNot { it.id == id },
+                            addressSuccess = "Recipient removed."
+                        )
+                    }
+                }
+                .onFailure { failure ->
+                    _state.update {
+                        it.copy(
+                            addressActionLoading = false,
+                            addressesError = failure.message ?: "Unable to remove address."
+                        )
+                    }
+                }
+        }
+    }
+
+    fun saveDate() {
+        val current = _state.value
+        BuyerAccountValidators.validateSavedDate(
+            label = current.savedDateLabel,
+            eventDate = current.savedDateEventDate,
+            recurring = current.savedDateRecurring
+        )?.let { error ->
+            _state.update { it.copy(datesError = error, dateSuccess = null) }
+            return
+        }
+
+        val request = SavedDateRequest(
+            label = current.savedDateLabel.trim(),
+            eventDate = current.savedDateEventDate.trim(),
+            recurring = current.savedDateRecurring
+        )
+
+        viewModelScope.launch {
+            _state.update { it.copy(dateActionLoading = true, datesError = null, dateSuccess = null) }
+            repository.createSavedDate(request)
+                .onSuccess { savedDate ->
+                    _state.update { state ->
+                        state.copy(
+                            dateActionLoading = false,
+                            savedDates = listOf(savedDate) + state.savedDates,
+                            dateSuccess = "${savedDate.label ?: "Important date"} saved.",
+                            savedDateLabel = "",
+                            savedDateEventDate = "",
+                            savedDateRecurring = true
+                        )
+                    }
+                }
+                .onFailure { failure ->
+                    _state.update {
+                        it.copy(
+                            dateActionLoading = false,
+                            datesError = failure.message ?: "Unable to save important date."
+                        )
+                    }
+                }
+        }
+    }
+}
+
 class OrderHistoryViewModel(private val repository: OrderRepository) : ViewModel() {
     private val _state = MutableStateFlow(OrderHistoryUiState())
     val state: StateFlow<OrderHistoryUiState> = _state.asStateFlow()
@@ -471,6 +746,7 @@ class CatalogViewModel(private val repository: CatalogRepository) : ViewModel() 
 class SessionViewModel(private val sessionStore: SessionStore) : ViewModel() {
     val hasToken: Boolean = sessionStore.token() != null
     val displayName: String = sessionStore.userName()?.substringBefore(" ") ?: "Buyer"
+    val isBuyer: Boolean = BuyerRolePolicy.isBuyer(sessionStore.role())
 
     fun clear() {
         sessionStore.clear()
@@ -483,6 +759,7 @@ class PetalViewModelFactory(
     private val cartRepository: CartRepository? = null,
     private val checkoutRepository: CheckoutRepository? = null,
     private val orderRepository: OrderRepository? = null,
+    private val buyerAccountRepository: BuyerAccountRepository? = null,
     private val sessionStore: SessionStore? = null
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
@@ -495,9 +772,11 @@ class PetalViewModelFactory(
             modelClass.isAssignableFrom(CartViewModel::class.java) ->
                 CartViewModel(requireNotNull(cartRepository)) as T
             modelClass.isAssignableFrom(CheckoutViewModel::class.java) ->
-                CheckoutViewModel(requireNotNull(checkoutRepository)) as T
+                CheckoutViewModel(requireNotNull(checkoutRepository), buyerAccountRepository) as T
             modelClass.isAssignableFrom(OrderHistoryViewModel::class.java) ->
                 OrderHistoryViewModel(requireNotNull(orderRepository)) as T
+            modelClass.isAssignableFrom(BuyerAccountViewModel::class.java) ->
+                BuyerAccountViewModel(requireNotNull(buyerAccountRepository)) as T
             modelClass.isAssignableFrom(SessionViewModel::class.java) ->
                 SessionViewModel(requireNotNull(sessionStore)) as T
             else -> throw IllegalArgumentException("Unknown ViewModel ${modelClass.name}")
