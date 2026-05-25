@@ -28,5 +28,8 @@ target/
 logs/
 *.log
 
+# Local QA artifacts
+qa-artifacts/
+
 # OS
 Thumbs.db
