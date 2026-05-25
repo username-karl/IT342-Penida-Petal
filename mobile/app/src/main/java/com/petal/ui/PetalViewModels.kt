@@ -17,8 +17,10 @@ import com.petal.data.checkout.CheckoutRecipientValidator
 import com.petal.data.checkout.CheckoutRepository
 import com.petal.data.checkout.CheckoutScheduleValidator
 import com.petal.data.checkout.CheckoutStep3Validator
+import com.petal.data.checkout.BuyerOrderResponse
 import com.petal.data.checkout.DeliverySlotAvailabilityResponse
 import com.petal.data.checkout.OrderResponse
+import com.petal.data.checkout.OrderRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -202,6 +204,15 @@ data class CheckoutUiState(
     val error: String? = null
 )
 
+data class OrderHistoryUiState(
+    val loading: Boolean = false,
+    val detailLoading: Boolean = false,
+    val error: String? = null,
+    val detailError: String? = null,
+    val orders: List<BuyerOrderResponse> = emptyList(),
+    val selectedOrder: BuyerOrderResponse? = null
+)
+
 data class OrderConfirmationUiState(
     val order: OrderResponse,
     val recipientName: String,
@@ -379,6 +390,53 @@ class CheckoutViewModel(private val repository: CheckoutRepository? = null) : Vi
     }
 }
 
+class OrderHistoryViewModel(private val repository: OrderRepository) : ViewModel() {
+    private val _state = MutableStateFlow(OrderHistoryUiState())
+    val state: StateFlow<OrderHistoryUiState> = _state.asStateFlow()
+
+    fun loadOrders() {
+        viewModelScope.launch {
+            _state.update { it.copy(loading = true, error = null) }
+            repository.orders()
+                .onSuccess { orders ->
+                    _state.update { it.copy(loading = false, orders = orders) }
+                }
+                .onFailure { failure ->
+                    _state.update {
+                        it.copy(
+                            loading = false,
+                            error = failure.message ?: "Unable to load orders."
+                        )
+                    }
+                }
+        }
+    }
+
+    fun loadOrder(id: Long) {
+        viewModelScope.launch {
+            _state.update {
+                it.copy(
+                    detailLoading = true,
+                    detailError = null,
+                    selectedOrder = it.orders.firstOrNull { order -> order.id == id }
+                )
+            }
+            repository.order(id)
+                .onSuccess { order ->
+                    _state.update { it.copy(detailLoading = false, selectedOrder = order) }
+                }
+                .onFailure { failure ->
+                    _state.update {
+                        it.copy(
+                            detailLoading = false,
+                            detailError = failure.message ?: "Unable to load order."
+                        )
+                    }
+                }
+        }
+    }
+}
+
 class CatalogViewModel(private val repository: CatalogRepository) : ViewModel() {
     private val _state = MutableStateFlow(CatalogUiState())
     val state: StateFlow<CatalogUiState> = _state.asStateFlow()
@@ -424,6 +482,7 @@ class PetalViewModelFactory(
     private val catalogRepository: CatalogRepository? = null,
     private val cartRepository: CartRepository? = null,
     private val checkoutRepository: CheckoutRepository? = null,
+    private val orderRepository: OrderRepository? = null,
     private val sessionStore: SessionStore? = null
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
@@ -437,6 +496,8 @@ class PetalViewModelFactory(
                 CartViewModel(requireNotNull(cartRepository)) as T
             modelClass.isAssignableFrom(CheckoutViewModel::class.java) ->
                 CheckoutViewModel(requireNotNull(checkoutRepository)) as T
+            modelClass.isAssignableFrom(OrderHistoryViewModel::class.java) ->
+                OrderHistoryViewModel(requireNotNull(orderRepository)) as T
             modelClass.isAssignableFrom(SessionViewModel::class.java) ->
                 SessionViewModel(requireNotNull(sessionStore)) as T
             else -> throw IllegalArgumentException("Unknown ViewModel ${modelClass.name}")

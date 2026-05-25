@@ -43,7 +43,10 @@ import com.petal.data.catalog.ProductResponse
 import com.petal.data.checkout.CheckoutCardMessageValidator
 import com.petal.data.checkout.CheckoutScheduleValidator
 import com.petal.data.checkout.CheckoutStep3Validator
+import com.petal.data.checkout.BuyerOrderItemResponse
+import com.petal.data.checkout.BuyerOrderResponse
 import com.petal.data.checkout.DeliverySlotAvailabilityResponse
+import com.petal.data.checkout.OrderDisplayFormatters
 import com.petal.ui.components.EmptyPanel
 import com.petal.ui.components.ErrorBanner
 import com.petal.ui.components.LoadingProductGrid
@@ -92,9 +95,12 @@ private object Routes {
     const val CheckoutCardMessage = "checkout/card-message"
     const val CheckoutSchedulePay = "checkout/schedule-pay"
     const val OrderConfirmation = "checkout/confirmation"
+    const val OrderHistory = "orders"
+    const val OrderDetail = "orders/{id}"
 
     fun products(mood: String) = "products/${Uri.encode(mood)}"
     fun product(id: Long) = "product/$id"
+    fun orderDetail(id: Long) = "orders/$id"
 }
 
 @Composable
@@ -113,6 +119,9 @@ fun PetalApp() {
     )
     val checkoutViewModel: CheckoutViewModel = viewModel(
         factory = PetalViewModelFactory(checkoutRepository = container.checkoutRepository)
+    )
+    val orderHistoryViewModel: OrderHistoryViewModel = viewModel(
+        factory = PetalViewModelFactory(orderRepository = container.orderRepository)
     )
     val sessionViewModel: SessionViewModel = viewModel(
         factory = PetalViewModelFactory(sessionStore = container.sessionStore)
@@ -149,6 +158,7 @@ fun PetalApp() {
                     MoodGridScreen(
                         displayName = sessionViewModel.displayName,
                         onMood = { mood -> navController.navigate(Routes.products(mood)) },
+                        onOrders = { navController.navigate(Routes.OrderHistory) },
                         onLogout = {
                             sessionViewModel.clear()
                             navController.navigate(Routes.Login) {
@@ -220,12 +230,36 @@ fun PetalApp() {
                 composable(Routes.OrderConfirmation) {
                     OrderConfirmationScreen(
                         confirmation = checkoutViewModel.state.collectAsState().value.orderConfirmation,
+                        onOrders = {
+                            checkoutViewModel.clearOrderConfirmation()
+                            navController.navigate(Routes.OrderHistory) {
+                                popUpTo(Routes.Moods)
+                            }
+                        },
                         onHome = {
                             checkoutViewModel.clearOrderConfirmation()
                             navController.navigate(Routes.Moods) {
                                 popUpTo(Routes.Moods) { inclusive = true }
                             }
                         }
+                    )
+                }
+                composable(Routes.OrderHistory) {
+                    OrderHistoryScreen(
+                        viewModel = orderHistoryViewModel,
+                        onBack = { navController.popBackStack() },
+                        onOrder = { orderId -> navController.navigate(Routes.orderDetail(orderId)) },
+                        onBrowse = { navController.navigate(Routes.Moods) }
+                    )
+                }
+                composable(
+                    route = Routes.OrderDetail,
+                    arguments = listOf(navArgument("id") { type = NavType.LongType })
+                ) { entry ->
+                    OrderDetailScreen(
+                        id = entry.arguments?.getLong("id") ?: 0L,
+                        viewModel = orderHistoryViewModel,
+                        onBack = { navController.popBackStack() }
                     )
                 }
             }
@@ -325,12 +359,22 @@ private fun AuthScaffold(eyebrow: String, title: String, content: @Composable Co
 }
 
 @Composable
-private fun MoodGridScreen(displayName: String, onMood: (String) -> Unit, onLogout: () -> Unit) {
+private fun MoodGridScreen(
+    displayName: String,
+    onMood: (String) -> Unit,
+    onOrders: () -> Unit,
+    onLogout: () -> Unit
+) {
     Column(Modifier.fillMaxSize().background(Paper)) {
         PetalHeader(
             title = "Mood Catalog",
             subtitle = "Welcome, $displayName",
-            action = { PetalSecondaryButton("Sign out", onLogout) }
+            action = {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    PetalSecondaryButton("Orders", onOrders)
+                    PetalSecondaryButton("Sign out", onLogout)
+                }
+            }
         )
         LazyVerticalGrid(
             columns = GridCells.Adaptive(150.dp),
@@ -861,7 +905,11 @@ private fun CheckoutSchedulePayScreen(
 }
 
 @Composable
-private fun OrderConfirmationScreen(confirmation: OrderConfirmationUiState?, onHome: () -> Unit) {
+private fun OrderConfirmationScreen(
+    confirmation: OrderConfirmationUiState?,
+    onOrders: () -> Unit,
+    onHome: () -> Unit
+) {
     Column(Modifier.fillMaxSize().background(Paper)) {
         PetalHeader(title = "Order Confirmed", subtitle = "Your gift is on its way")
         Column(
@@ -912,10 +960,245 @@ private fun OrderConfirmationScreen(confirmation: OrderConfirmationUiState?, onH
                     )
                 }
                 Spacer(Modifier.height(18.dp))
-                PetalPrimaryButton("Return Home", onHome, Modifier.fillMaxWidth())
+                PetalPrimaryButton("Track My Orders", onOrders, Modifier.fillMaxWidth())
+                PetalSecondaryButton("Return Home", onHome, Modifier.fillMaxWidth())
             }
         }
     }
+}
+
+@Composable
+private fun OrderHistoryScreen(
+    viewModel: OrderHistoryViewModel,
+    onBack: () -> Unit,
+    onOrder: (Long) -> Unit,
+    onBrowse: () -> Unit
+) {
+    val state by viewModel.state.collectAsState()
+    LaunchedEffect(Unit) {
+        viewModel.loadOrders()
+    }
+
+    Column(Modifier.fillMaxSize().background(Paper)) {
+        PetalHeader(title = "Order History", subtitle = "Track gifts after checkout", action = {
+            PetalSecondaryButton("Back", onBack)
+        })
+        when {
+            state.loading -> LoadingProductGrid(Modifier.padding(20.dp))
+            state.error != null -> ErrorBanner(state.error.orEmpty(), Modifier.padding(20.dp))
+            state.orders.isEmpty() -> {
+                EmptyPanel(
+                    title = "No orders yet",
+                    message = "Placed gifts will appear here after checkout.",
+                    modifier = Modifier.padding(20.dp)
+                )
+                PetalPrimaryButton("Browse Moods", onBrowse, Modifier.padding(20.dp).fillMaxWidth())
+            }
+            else -> LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(20.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                items(state.orders) { order ->
+                    OrderHistoryCard(order = order, onClick = { onOrder(order.id) })
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun OrderHistoryCard(order: BuyerOrderResponse, onClick: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(4.dp))
+            .clickable(onClick = onClick)
+            .background(SurfaceWarm, RoundedCornerShape(4.dp))
+            .border(1.dp, Stone200, RoundedCornerShape(4.dp))
+            .padding(18.dp)
+    ) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(order.orderNumber ?: "Order #${order.id}", style = MaterialTheme.typography.titleLarge)
+                Text(order.itemSummary ?: "Petal gift order", color = Stone500, style = MaterialTheme.typography.bodyMedium)
+            }
+            StatusBadge(order.status)
+        }
+        Spacer(Modifier.height(14.dp))
+        SummaryRow("Order ID", order.id.toString())
+        SummaryRow("Delivery Date", OrderDisplayFormatters.orFallback(order.deliveryDate, "Not set"))
+        SummaryRow("Time Slot", OrderDisplayFormatters.orFallback(order.timeSlot, "Not set"))
+        SummaryRow("Total", OrderDisplayFormatters.formatOptionalPeso(order.totalAmount))
+        SummaryRow("Payment Method", OrderDisplayFormatters.orFallback(order.paymentMethod))
+    }
+}
+
+@Composable
+private fun OrderDetailScreen(id: Long, viewModel: OrderHistoryViewModel, onBack: () -> Unit) {
+    val state by viewModel.state.collectAsState()
+    LaunchedEffect(id) {
+        viewModel.loadOrder(id)
+    }
+
+    Column(Modifier.fillMaxSize().background(Paper)) {
+        PetalHeader(title = "Order Detail", subtitle = "Gift status and delivery details", action = {
+            PetalSecondaryButton("Back", onBack)
+        })
+        when {
+            state.detailLoading && state.selectedOrder == null -> LoadingProductGrid(Modifier.padding(20.dp))
+            state.detailError != null && state.selectedOrder == null -> ErrorBanner(state.detailError.orEmpty(), Modifier.padding(20.dp))
+            state.selectedOrder != null -> OrderDetailContent(order = state.selectedOrder!!, detailError = state.detailError)
+        }
+    }
+}
+
+@Composable
+private fun OrderDetailContent(order: BuyerOrderResponse, detailError: String?) {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(20.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        detailError?.let { error ->
+            item { ErrorBanner(error) }
+        }
+        item {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .background(SageSoft, RoundedCornerShape(8.dp))
+                    .border(1.dp, Stone200, RoundedCornerShape(8.dp))
+                    .padding(18.dp)
+            ) {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(order.orderNumber ?: "Order #${order.id}", style = MaterialTheme.typography.headlineSmall)
+                        Text("Order ID ${order.id}", color = Stone700)
+                    }
+                    StatusBadge(order.status)
+                }
+            }
+        }
+        item {
+            InfoPanel(
+                title = "Schedule",
+                body = listOf(
+                    "Delivery date: ${OrderDisplayFormatters.orFallback(order.deliveryDate, "Not set")}",
+                    "Time slot: ${OrderDisplayFormatters.orFallback(order.timeSlot, "Not set")}",
+                    "Payment: ${OrderDisplayFormatters.orFallback(order.paymentMethod)}",
+                    "Total: ${OrderDisplayFormatters.formatOptionalPeso(order.totalAmount)}"
+                ).joinToString("\n")
+            )
+        }
+        item {
+            InfoPanel(
+                title = OrderDisplayFormatters.orFallback(order.recipientName, "Recipient"),
+                body = OrderDisplayFormatters.orFallback(order.recipientAddress, "Recipient address not provided")
+            )
+        }
+        order.cardMessage?.trim()?.takeIf { it.isNotBlank() }?.let { message ->
+            item {
+                InfoPanel(title = "Card Message", body = message)
+            }
+        }
+        if (order.items.isNotEmpty()) {
+            item {
+                Text("Items", style = MaterialTheme.typography.headlineSmall)
+            }
+            items(order.items) { item ->
+                OrderItemRow(item)
+            }
+        } else {
+            item {
+                InfoPanel(title = "Items", body = order.itemSummary ?: "No item details returned.")
+            }
+        }
+        order.shipping?.let { shipping ->
+            item {
+                InfoPanel(
+                    title = "Delivery Status",
+                    body = listOf(
+                        "Courier: ${OrderDisplayFormatters.orFallback(shipping.courierName)}",
+                        "Tracking: ${OrderDisplayFormatters.orFallback(shipping.trackingNumber)}",
+                        "Latest: ${OrderDisplayFormatters.orFallback(shipping.latestStatus, OrderDisplayFormatters.statusLabel(order.status))}",
+                        "Estimated: ${OrderDisplayFormatters.orFallback(shipping.estimatedDeliveryDate, "Not set")}"
+                    ).joinToString("\n")
+                )
+            }
+            if (shipping.events.isNotEmpty()) {
+                item {
+                    Text("Tracking Updates", style = MaterialTheme.typography.headlineSmall)
+                }
+                items(shipping.events) { event ->
+                    InfoPanel(
+                        title = OrderDisplayFormatters.orFallback(event.status, "Update"),
+                        body = listOfNotNull(
+                            event.description?.trim()?.takeIf { it.isNotBlank() },
+                            event.timestamp?.trim()?.takeIf { it.isNotBlank() }
+                        ).joinToString("\n").ifBlank { "Tracking update received." }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun OrderItemRow(item: BuyerOrderItemResponse) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(SurfaceWarm, RoundedCornerShape(4.dp))
+            .border(1.dp, Stone200, RoundedCornerShape(4.dp))
+            .padding(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        AsyncImage(
+            model = item.imageUrl,
+            contentDescription = item.productName,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier
+                .size(72.dp)
+                .clip(RoundedCornerShape(4.dp))
+                .background(SurfaceWarm)
+                .border(1.dp, Stone200, RoundedCornerShape(4.dp))
+        )
+        Column(Modifier.weight(1f)) {
+            Text(item.floristName ?: "Local Petal Florist", style = MaterialTheme.typography.labelSmall)
+            Text(item.productName ?: "Petal arrangement", style = MaterialTheme.typography.titleLarge)
+            Text("Qty ${item.quantity}", color = Stone500, style = MaterialTheme.typography.bodyMedium)
+        }
+        Text(OrderDisplayFormatters.formatOptionalPeso(item.lineTotal), color = Stone950, fontWeight = FontWeight.SemiBold)
+    }
+}
+
+@Composable
+private fun StatusBadge(status: String?) {
+    val normalized = status?.trim()?.uppercase(Locale.US)
+    val background = when (normalized) {
+        "DELIVERED", "COMPLETED" -> SageSoft
+        "ARRANGING", "PREPARING", "ACCEPTED", "READY_FOR_PICKUP", "OUT_FOR_DELIVERY", "SHIPPED" -> BlushSoft
+        "CANCELLED" -> Stone200
+        else -> SurfaceWarm
+    }
+    val textColor = when (normalized) {
+        "CANCELLED" -> Stone500
+        else -> Stone950
+    }
+    Text(
+        text = OrderDisplayFormatters.statusLabel(status),
+        modifier = Modifier
+            .background(background, RoundedCornerShape(999.dp))
+            .border(1.dp, Stone200, RoundedCornerShape(999.dp))
+            .padding(horizontal = 10.dp, vertical = 6.dp),
+        color = textColor,
+        style = MaterialTheme.typography.labelSmall
+    )
 }
 
 @Composable

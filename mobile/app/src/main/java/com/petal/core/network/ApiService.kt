@@ -10,6 +10,7 @@ import com.petal.data.cart.CartResponse
 import com.petal.data.cart.UpdateCartItemRequest
 import com.petal.data.catalog.ProductResponse
 import com.petal.data.checkout.CreateOrderRequest
+import com.petal.data.checkout.BuyerOrderResponse
 import com.petal.data.checkout.DeliverySlotAvailabilityResponse
 import com.petal.data.checkout.OrderResponse
 import retrofit2.Response
@@ -57,4 +58,10 @@ interface ApiService {
 
     @POST("/api/orders")
     suspend fun createOrder(@Body request: CreateOrderRequest): Response<ApiResponse<OrderResponse>>
+
+    @GET("/api/orders")
+    suspend fun orders(): Response<ApiResponse<List<BuyerOrderResponse>>>
+
+    @GET("/api/orders/{id}")
+    suspend fun order(@Path("id") id: Long): Response<ApiResponse<BuyerOrderResponse>>
 }
