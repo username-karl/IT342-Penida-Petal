@@ -69,6 +69,16 @@ const orderRows = [
     },
 ];
 
+const orderWorkflowColumns = [
+    { status: 'PENDING', title: 'New', helper: 'Awaiting florist confirmation', accent: 'border-rose-200 bg-rose-50/70' },
+    { status: 'ACCEPTED', title: 'Accepted', helper: 'Confirmed by the studio', accent: 'border-amber-200 bg-amber-50/70' },
+    { status: 'ARRANGING', title: 'Arranging', helper: 'Bouquet in progress', accent: 'border-amber-200 bg-amber-50/70' },
+    { status: 'READY_FOR_PICKUP', title: 'Ready', helper: 'Prepared for rider pickup', accent: 'border-green-200 bg-green-50/70' },
+    { status: 'OUT_FOR_DELIVERY', title: 'Out for Delivery', helper: 'With courier', accent: 'border-stone-300 bg-stone-100/80' },
+    { status: 'DELIVERED', title: 'Delivered', helper: 'Completed gifts', accent: 'border-green-200 bg-green-50/70' },
+    { status: 'CANCELLED', title: 'Cancelled', helper: 'Closed without delivery', accent: 'border-stone-200 bg-stone-50' },
+];
+
 const navGroups = [
     {
         label: 'Operations',
@@ -98,11 +108,20 @@ function currency(value) {
     return `₱${number.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+function normalizeSellerStatus(status) {
+    const normalized = (status || 'PENDING').trim().toUpperCase().replaceAll(' ', '_');
+    if (normalized === 'PREPARING') return 'ARRANGING';
+    if (normalized === 'SHIPPED') return 'OUT_FOR_DELIVERY';
+    if (normalized === 'COMPLETED') return 'DELIVERED';
+    return normalized;
+}
+
 function statusClass(status) {
-    if (status === 'COMPLETED' || status === 'DELIVERED' || status === 'READY_FOR_PICKUP') return 'bg-green-50 text-green-800 border-green-200';
-    if (status === 'CANCELLED') return 'bg-stone-100 text-stone-500 border-stone-200';
-    if (status === 'ACCEPTED' || status === 'ARRANGING' || status === 'PREPARING') return 'bg-amber-50 text-amber-800 border-amber-200';
-    if (status === 'OUT_FOR_DELIVERY') return 'bg-stone-900 text-white border-stone-900';
+    const normalized = normalizeSellerStatus(status);
+    if (normalized === 'DELIVERED' || normalized === 'READY_FOR_PICKUP') return 'bg-green-50 text-green-800 border-green-200';
+    if (normalized === 'CANCELLED') return 'bg-stone-100 text-stone-500 border-stone-200';
+    if (normalized === 'ACCEPTED' || normalized === 'ARRANGING') return 'bg-amber-50 text-amber-800 border-amber-200';
+    if (normalized === 'OUT_FOR_DELIVERY') return 'bg-stone-900 text-white border-stone-900';
     return 'bg-rose-50 text-rose-800 border-rose-200';
 }
 
@@ -115,10 +134,10 @@ function statusLabel(status) {
         READY_FOR_PICKUP: 'Ready for Pickup',
         OUT_FOR_DELIVERY: 'Out for Delivery',
         DELIVERED: 'Delivered',
-        COMPLETED: 'Completed',
+        COMPLETED: 'Delivered',
         CANCELLED: 'Cancelled',
     };
-    return labels[status] || status;
+    return labels[status] || labels[normalizeSellerStatus(status)] || status;
 }
 
 function paymentLabel(value) {
@@ -132,9 +151,10 @@ function paymentLabel(value) {
 }
 
 function nextStatus(status) {
-    if (status === 'PENDING') return 'ACCEPTED';
-    if (status === 'ACCEPTED') return 'ARRANGING';
-    if (status === 'ARRANGING' || status === 'PREPARING') return 'READY_FOR_PICKUP';
+    const normalized = normalizeSellerStatus(status);
+    if (normalized === 'PENDING') return 'ACCEPTED';
+    if (normalized === 'ACCEPTED') return 'ARRANGING';
+    if (normalized === 'ARRANGING') return 'READY_FOR_PICKUP';
     return null;
 }
 
@@ -151,6 +171,14 @@ function deliveryLabel(order) {
     if (!order.deliveryDate) return order.timeSlot || 'No delivery window';
     const date = new Date(`${order.deliveryDate}T00:00:00`);
     return `${date.toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })}, ${order.timeSlot}`;
+}
+
+function detailActionLabel(status) {
+    const normalized = normalizeSellerStatus(status);
+    if (normalized === 'READY_FOR_PICKUP') return 'Update shipping';
+    if (normalized === 'OUT_FOR_DELIVERY') return 'View tracking';
+    if (normalized === 'DELIVERED') return 'View proof';
+    return 'View details';
 }
 
 function apiErrorMessage(err, fallback) {
@@ -249,6 +277,21 @@ export default function SellerCentre() {
             { label: 'Catalog Value', value: currency(inventoryValue), helper: 'Current listed assortment', icon: Wallet },
         ];
     }, [orders, products]);
+
+    const orderBoardColumns = useMemo(() => {
+        const grouped = orders.reduce((acc, order) => {
+            const status = normalizeSellerStatus(order.status);
+            acc[status] = [...(acc[status] || []), order];
+            return acc;
+        }, {});
+
+        return orderWorkflowColumns
+            .filter((column) => column.status !== 'CANCELLED' || grouped.CANCELLED?.length)
+            .map((column) => ({
+                ...column,
+                orders: grouped[column.status] || [],
+            }));
+    }, [orders]);
 
     const handleLogout = () => {
         logout();
@@ -636,62 +679,117 @@ export default function SellerCentre() {
                         )}
 
                         {activeTab === 'orders' && (
-                            <div className="bg-white border border-stone-200">
-                                <div className="p-5 border-b border-stone-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                            <div className="space-y-4">
+                                <div className="bg-white border border-stone-200 p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
                                     <div>
-                                        <h2 className="font-serif text-2xl">Orders</h2>
-                                        <p className="text-sm text-stone-500 mt-1">Review buyer messages, delivery windows, and preparation status.</p>
+                                        <p className="text-xs uppercase tracking-[0.18em] text-stone-400">Florist Kanban</p>
+                                        <h2 className="mt-1 font-serif text-2xl">Orders by Status</h2>
+                                        <p className="text-sm text-stone-500 mt-1">Move early orders with quick actions. Shipping and proof steps stay in order details.</p>
                                     </div>
-                                    <button className="h-10 px-4 bg-stone-900 text-white text-sm font-semibold inline-flex items-center gap-2">
-                                        <Truck size={16} /> Arrange Pickup
-                                    </button>
+                                    <div className="flex items-center gap-3 text-sm text-stone-500">
+                                        <Truck size={17} />
+                                        <span>{orders.length} active board item{orders.length === 1 ? '' : 's'}</span>
+                                    </div>
                                 </div>
-                                <div className="overflow-x-auto">
-                                    <table className="w-full text-sm">
-                                        <thead className="bg-stone-50 text-left text-xs uppercase tracking-[0.14em] text-stone-400">
-                                            <tr>
-                                                <th className="px-5 py-3 font-medium">Order</th>
-                                                <th className="px-5 py-3 font-medium">Buyer</th>
-                                                <th className="px-5 py-3 font-medium">Delivery</th>
-                                                <th className="px-5 py-3 font-medium">Total</th>
-                                                <th className="px-5 py-3 font-medium">Status</th>
-                                                <th className="px-5 py-3 font-medium text-right">Action</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-stone-100">
-                                            {orders.map((order) => (
-                                                <tr key={order.id} className="hover:bg-stone-50">
-                                                    <td className="px-5 py-4 font-medium text-stone-950">{order.orderNumber}<p className="text-xs font-normal text-stone-500 mt-1">{order.itemSummary}</p></td>
-                                                    <td className="px-5 py-4 text-stone-600">{order.buyerName}<p className="text-xs text-stone-400 mt-1">For {order.recipientName}</p><p className="text-xs text-stone-400 mt-1">{paymentLabel(order.paymentMethod)}</p></td>
-                                                    <td className="px-5 py-4 text-stone-600">{deliveryLabel(order)}</td>
-                                                    <td className="px-5 py-4 font-semibold">{currency(order.sellerSubtotal)}</td>
-                                                    <td className="px-5 py-4"><span className={`inline-flex border px-2.5 py-1 text-xs font-medium ${statusClass(order.status)}`}>{statusLabel(order.status)}</span></td>
-                                                    <td className="px-5 py-4 text-right">
-                                                        <Link to={`/seller-orders/${order.id}`} className="mr-3 text-sm font-medium text-stone-700 hover:text-stone-950">View</Link>
-                                                        {nextStatus(order.status) ? (
-                                                            <button
-                                                                onClick={() => updateOrderStatus(order, nextStatus(order.status))}
-                                                                disabled={updatingOrderId === order.id}
-                                                                className="text-sm font-medium text-stone-700 hover:text-stone-950 disabled:text-stone-300"
-                                                            >
-                                                                {updatingOrderId === order.id ? 'Updating...' : nextStatusLabel(order.status)}
-                                                            </button>
-                                                        ) : (
-                                                            <span className="text-xs text-stone-400">No action</span>
-                                                        )}
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                            {!orders.length && (
-                                                <tr>
-                                                    <td colSpan="6" className="px-5 py-12 text-center text-stone-500">
-                                                        No seller orders yet. Customer checkout orders will land here once they include your products.
-                                                    </td>
-                                                </tr>
-                                            )}
-                                        </tbody>
-                                    </table>
-                                </div>
+
+                                {loading ? (
+                                    <div className="grid grid-cols-1 gap-4 lg:flex lg:overflow-x-auto">
+                                        {[1, 2, 3, 4].map((item) => (
+                                            <div key={item} className="h-64 bg-stone-100 animate-pulse border border-stone-200 lg:min-w-[290px] lg:flex-1" />
+                                        ))}
+                                    </div>
+                                ) : orders.length ? (
+                                    <div className="grid grid-cols-1 gap-4 lg:flex lg:overflow-x-auto lg:pb-3">
+                                        {orderBoardColumns.map((column) => (
+                                            <section key={column.status} className="bg-white border border-stone-200 lg:min-w-[290px] lg:flex-1">
+                                                <div className={`border-b px-4 py-4 ${column.accent}`}>
+                                                    <div className="flex items-start justify-between gap-3">
+                                                        <div>
+                                                            <h3 className="font-serif text-xl text-stone-950">{column.title}</h3>
+                                                            <p className="mt-1 text-xs leading-relaxed text-stone-500">{column.helper}</p>
+                                                        </div>
+                                                        <span className="inline-flex h-8 min-w-8 items-center justify-center border border-white/70 bg-white px-2 text-xs font-semibold text-stone-700">
+                                                            {column.orders.length}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                                <div className="space-y-3 p-3">
+                                                    {column.orders.map((order) => (
+                                                        <article key={order.id} className="border border-stone-200 bg-[#FDFCF8] p-4 shadow-sm">
+                                                            <div className="flex items-start justify-between gap-3">
+                                                                <div className="min-w-0">
+                                                                    <p className="text-[11px] uppercase tracking-[0.18em] text-stone-400">{order.orderNumber}</p>
+                                                                    <h4 className="mt-2 font-serif text-lg leading-tight text-stone-950">{order.itemSummary}</h4>
+                                                                </div>
+                                                                <span className={`shrink-0 border px-2 py-1 text-[10px] font-medium ${statusClass(order.status)}`}>{statusLabel(order.status)}</span>
+                                                            </div>
+
+                                                            <dl className="mt-4 space-y-2 text-xs text-stone-500">
+                                                                <div className="flex justify-between gap-3">
+                                                                    <dt>Buyer</dt>
+                                                                    <dd className="min-w-0 truncate text-right font-medium text-stone-800">{order.buyerName}</dd>
+                                                                </div>
+                                                                <div className="flex justify-between gap-3">
+                                                                    <dt>Recipient</dt>
+                                                                    <dd className="min-w-0 truncate text-right text-stone-700">{order.recipientName}</dd>
+                                                                </div>
+                                                                <div className="flex justify-between gap-3">
+                                                                    <dt>Delivery</dt>
+                                                                    <dd className="text-right text-stone-700">{deliveryLabel(order)}</dd>
+                                                                </div>
+                                                                <div className="flex justify-between gap-3">
+                                                                    <dt>Payment</dt>
+                                                                    <dd className="text-right text-stone-700">{paymentLabel(order.paymentMethod)}</dd>
+                                                                </div>
+                                                            </dl>
+
+                                                            <div className="mt-4 flex items-center justify-between gap-3 border-t border-stone-100 pt-3">
+                                                                <p className="font-semibold text-stone-950">{currency(order.sellerSubtotal)}</p>
+                                                                <div className="flex flex-wrap justify-end gap-1.5">
+                                                                    {order.fulfillmentImageUrl && (
+                                                                        <span className="border border-green-200 bg-green-50 px-2 py-1 text-[10px] font-medium uppercase tracking-wider text-green-800">Prep photo</span>
+                                                                    )}
+                                                                    {order.proofImageUrl && (
+                                                                        <span className="border border-rose-200 bg-rose-50 px-2 py-1 text-[10px] font-medium uppercase tracking-wider text-rose-800">Proof</span>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+
+                                                            <div className="mt-4 grid grid-cols-1 gap-2">
+                                                                {nextStatus(order.status) ? (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => updateOrderStatus(order, nextStatus(order.status))}
+                                                                        disabled={updatingOrderId === order.id}
+                                                                        className="inline-flex min-h-10 items-center justify-center border border-stone-900 bg-stone-900 px-3 text-xs font-semibold uppercase tracking-widest text-white hover:bg-stone-800 disabled:cursor-not-allowed disabled:border-stone-200 disabled:bg-stone-200 disabled:text-stone-500"
+                                                                    >
+                                                                        {updatingOrderId === order.id ? 'Updating...' : nextStatusLabel(order.status)}
+                                                                    </button>
+                                                                ) : (
+                                                                    <Link to={`/seller-orders/${order.id}`} className="inline-flex min-h-10 items-center justify-center border border-stone-900 bg-stone-900 px-3 text-xs font-semibold uppercase tracking-widest text-white hover:bg-stone-800">
+                                                                        {detailActionLabel(order.status)}
+                                                                    </Link>
+                                                                )}
+                                                                <Link to={`/seller-orders/${order.id}`} className="inline-flex min-h-10 items-center justify-center border border-stone-200 bg-white px-3 text-xs font-semibold uppercase tracking-widest text-stone-700 hover:border-stone-900 hover:text-stone-950">
+                                                                    View details
+                                                                </Link>
+                                                            </div>
+                                                        </article>
+                                                    ))}
+                                                    {!column.orders.length && (
+                                                        <div className="border border-dashed border-stone-200 bg-stone-50 px-4 py-6 text-center text-sm text-stone-500">
+                                                            No orders in {column.title.toLowerCase()}.
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </section>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="border border-dashed border-stone-300 bg-white px-5 py-12 text-center text-stone-500">
+                                        No seller orders yet. Customer checkout orders will land here once they include your products.
+                                    </div>
+                                )}
                             </div>
                         )}
 
