@@ -63,6 +63,39 @@ Backend configuration reads secrets from environment variables:
 
 Use `.env.example` as a template for local environment values. Real `.env` files are ignored and should stay local.
 
+#### Local Supabase runner for backend smoke tests
+
+For repeatable local runtime smoke, use a private PowerShell runner:
+
+```powershell
+cd backend
+Copy-Item .\run-supabase.example.ps1 .\run-supabase.ps1
+notepad .\run-supabase.ps1
+.\run-supabase.ps1
+```
+
+`backend/run-supabase.ps1` is ignored by Git and is where local secrets belong. The checked-in `backend/run-supabase.example.ps1` must keep placeholders only.
+
+The backend reads these environment variables from `application.properties`:
+
+| Variable | Purpose |
+|----------|---------|
+| `DB_URL` | PostgreSQL JDBC URL. For Supabase use direct DB or Session Pooler with `sslmode=require`. |
+| `DB_USERNAME` | Database username. For Supabase Session Pooler use `postgres.<project-ref>`, not just `postgres`. |
+| `DB_PASSWORD` | Supabase database or pooler password. |
+| `JWT_SECRET` | Local JWT signing key. Use a long local-only value. |
+| `STORAGE_PROVIDER` | `local` or `supabase`. Use `local` for DB/API smoke without Storage. |
+| `SUPABASE_URL` | Supabase project URL, required when `STORAGE_PROVIDER=supabase`. |
+| `SUPABASE_SERVICE_ROLE_KEY` | Backend-only service role key, required when `STORAGE_PROVIDER=supabase`. Never expose it to web/mobile or commit it. |
+
+After the backend starts, a quick smoke check is:
+
+```powershell
+Invoke-WebRequest http://localhost:8080/api/products
+```
+
+That should return HTTP 200 when the database credentials are valid and Flyway has applied the schema.
+
 ### Supabase Setup
 
 Petal uses Supabase only for PostgreSQL hosting and Storage. Authentication remains the Spring Boot JWT flow, and React never calls Supabase directly.
