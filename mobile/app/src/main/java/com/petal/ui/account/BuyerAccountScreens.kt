@@ -25,6 +25,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.petal.data.account.BuyerNotificationFormatters
+import com.petal.data.account.BuyerNotificationResponse
 import com.petal.data.account.DeliveryAddressResponse
 import com.petal.data.account.SavedDateReminderFormatters
 import com.petal.data.account.SavedDateResponse
@@ -69,6 +71,7 @@ fun BuyerAccountScreen(
             verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
             AddressBookSection(state = state, viewModel = viewModel)
+            NotificationSection(state = state, viewModel = viewModel)
             ImportantDatesSection(state = state, viewModel = viewModel)
         }
     }
@@ -132,6 +135,33 @@ private fun AddressBookSection(state: BuyerAccountUiState, viewModel: BuyerAccou
             loading = state.addressActionLoading,
             modifier = Modifier.fillMaxWidth()
         )
+    }
+}
+
+@Composable
+private fun NotificationSection(state: BuyerAccountUiState, viewModel: BuyerAccountViewModel) {
+    AccountPanel(eyebrow = "In-App Reminders", title = "Forget-Me-Not Notes", tint = BlushSoft) {
+        state.notificationsError?.let {
+            ErrorBanner(message = it)
+            Spacer(Modifier.height(12.dp))
+        }
+
+        when {
+            state.notificationsLoading -> Text("Loading reminders...", color = Stone500)
+            state.notifications.isEmpty() -> EmptyPanel(
+                title = "No reminder notes yet",
+                message = "Petal will save Forget-Me-Not reminders here when important dates are close."
+            )
+            else -> Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                state.notifications.forEach { notification ->
+                    NotificationCard(
+                        notification = notification,
+                        loading = state.notificationActionLoadingId == notification.id,
+                        onRead = { viewModel.markNotificationRead(notification.id) }
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -263,5 +293,35 @@ private fun SavedDateCard(savedDate: SavedDateResponse) {
             color = Stone500,
             style = MaterialTheme.typography.bodyMedium
         )
+    }
+}
+
+@Composable
+private fun NotificationCard(
+    notification: BuyerNotificationResponse,
+    loading: Boolean,
+    onRead: () -> Unit
+) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .background(Paper, RoundedCornerShape(4.dp))
+            .border(1.dp, Stone200, RoundedCornerShape(4.dp))
+            .padding(14.dp)
+    ) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text(BuyerNotificationFormatters.cardTitle(notification), style = MaterialTheme.typography.titleLarge)
+            Text(if (notification.read) "Read" else "New", color = Stone700, style = MaterialTheme.typography.labelSmall)
+        }
+        Spacer(Modifier.height(6.dp))
+        Text(BuyerNotificationFormatters.cardBody(notification), color = Stone700, style = MaterialTheme.typography.bodyMedium)
+        notification.eventDate?.let {
+            Spacer(Modifier.height(4.dp))
+            Text(it, color = Stone500, style = MaterialTheme.typography.bodyMedium)
+        }
+        if (!notification.read) {
+            Spacer(Modifier.height(10.dp))
+            PetalSecondaryButton(if (loading) "Updating" else "Mark read", onRead)
+        }
     }
 }

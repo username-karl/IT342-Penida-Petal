@@ -97,6 +97,8 @@ import androidx.compose.ui.text.font.FontWeight
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
+import com.petal.data.account.BuyerNotificationFormatters
+import com.petal.data.account.BuyerNotificationResponse
 
 private object Routes {
     const val Login = "login"
@@ -184,9 +186,14 @@ fun PetalApp() {
                     )
                 }
                 composable(Routes.Moods) {
+                    val accountState by buyerAccountViewModel.state.collectAsState()
+                    LaunchedEffect(Unit) {
+                        buyerAccountViewModel.loadNotifications(unreadOnly = true)
+                    }
                     val content: @Composable () -> Unit = {
                         MoodGridScreen(
                             displayName = sessionViewModel.displayName,
+                            primaryReminder = BuyerNotificationFormatters.primaryUnreadReminder(accountState.notifications),
                             onMood = { mood -> navController.navigate(Routes.products(mood)) },
                             onBrowse = { navigateTopLevel(Routes.Browse) },
                             onCart = if (sessionViewModel.isBuyer) {
@@ -540,6 +547,7 @@ private fun BuyerTopLevelScaffold(
 @Composable
 private fun MoodGridScreen(
     displayName: String,
+    primaryReminder: BuyerNotificationResponse?,
     onMood: (String) -> Unit,
     onBrowse: () -> Unit,
     onCart: (() -> Unit)?,
@@ -579,6 +587,15 @@ private fun MoodGridScreen(
                     PetalPrimaryButton("Browse Arrangements", onBrowse, Modifier.fillMaxWidth())
                 }
             }
+            primaryReminder?.let { reminder ->
+                item {
+                    ForgetMeNotNoticeCard(
+                        notification = reminder,
+                        primaryActionLabel = "Choose a bouquet",
+                        onPrimaryAction = onBrowse
+                    )
+                }
+            }
             item {
                 FlowRow(
                     modifier = Modifier.fillMaxWidth(),
@@ -597,6 +614,49 @@ private fun MoodGridScreen(
             }
             items(PetalMoods) { mood ->
                 MoodHomeCard(mood = mood, onClick = { onMood(mood.value) })
+            }
+        }
+    }
+}
+
+@Composable
+private fun ForgetMeNotNoticeCard(
+    notification: BuyerNotificationResponse,
+    primaryActionLabel: String? = null,
+    onPrimaryAction: (() -> Unit)? = null,
+    secondaryActionLabel: String? = null,
+    onSecondaryAction: (() -> Unit)? = null,
+    loading: Boolean = false
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(BlushSoft, RoundedCornerShape(8.dp))
+            .border(1.dp, Stone200, RoundedCornerShape(8.dp))
+            .padding(16.dp)
+    ) {
+        Text("FORGET-ME-NOT", style = MaterialTheme.typography.labelSmall, color = Stone500)
+        Spacer(Modifier.height(6.dp))
+        Text(
+            BuyerNotificationFormatters.cardTitle(notification),
+            style = MaterialTheme.typography.headlineSmall,
+            color = Stone950
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(
+            BuyerNotificationFormatters.cardBody(notification),
+            style = MaterialTheme.typography.bodyMedium,
+            color = Stone700
+        )
+        if ((primaryActionLabel != null && onPrimaryAction != null) || (secondaryActionLabel != null && onSecondaryAction != null)) {
+            Spacer(Modifier.height(14.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                if (primaryActionLabel != null && onPrimaryAction != null) {
+                    PetalPrimaryButton(primaryActionLabel, onPrimaryAction)
+                }
+                if (secondaryActionLabel != null && onSecondaryAction != null) {
+                    PetalSecondaryButton(if (loading) "Updating" else secondaryActionLabel, onSecondaryAction)
+                }
             }
         }
     }

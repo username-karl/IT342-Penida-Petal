@@ -41,7 +41,7 @@ class ImportantDateReminderSchedulerTest {
 
         scheduler.processDueReminders();
 
-        verify(notificationService).sendReminder(due);
+        verify(notificationService).sendReminder(due, 2026);
         verify(savedDateRepository).save(due);
         org.assertj.core.api.Assertions.assertThat(due.getNotifiedYear()).isEqualTo(2026);
     }
@@ -55,7 +55,7 @@ class ImportantDateReminderSchedulerTest {
 
         scheduler.processDueReminders();
 
-        verify(notificationService, never()).sendReminder(Mockito.any());
+        verify(notificationService, never()).sendReminder(Mockito.any(), Mockito.anyInt());
         verify(savedDateRepository, never()).save(Mockito.any());
     }
 
@@ -67,7 +67,7 @@ class ImportantDateReminderSchedulerTest {
 
         scheduler.processDueReminders();
 
-        verify(notificationService, never()).sendReminder(Mockito.any());
+        verify(notificationService, never()).sendReminder(Mockito.any(), Mockito.anyInt());
         verify(savedDateRepository, never()).save(Mockito.any());
     }
 
@@ -79,7 +79,7 @@ class ImportantDateReminderSchedulerTest {
 
         scheduler.processDueReminders();
 
-        verify(notificationService).sendReminder(birthday);
+        verify(notificationService).sendReminder(birthday, 2026);
         org.assertj.core.api.Assertions.assertThat(birthday.getNotifiedYear()).isEqualTo(2026);
     }
 
@@ -91,7 +91,7 @@ class ImportantDateReminderSchedulerTest {
 
         scheduler.processDueReminders();
 
-        verify(notificationService).sendReminder(newYearBirthday);
+        verify(notificationService).sendReminder(newYearBirthday, 2027);
         org.assertj.core.api.Assertions.assertThat(newYearBirthday.getNotifiedYear()).isEqualTo(2027);
     }
 

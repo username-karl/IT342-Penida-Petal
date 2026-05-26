@@ -12,6 +12,7 @@ import com.petal.repository.UserRepository;
 import com.petal.security.JwtFilter;
 import com.petal.security.JwtUtil;
 import com.petal.service.CartService;
+import com.petal.service.BuyerNotificationService;
 import com.petal.service.DeliveryAddressService;
 import com.petal.service.FloristService;
 import com.petal.service.OrderService;
@@ -46,6 +47,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         DeliveryAddressController.class,
         FloristController.class,
         FloristProfileImageController.class,
+        BuyerNotificationController.class,
         OrderController.class,
         UserAddressController.class,
         SellerOrderController.class
@@ -70,6 +72,9 @@ class SecurityBoundaryTest {
 
     @MockBean
     private CartService cartService;
+
+    @MockBean
+    private BuyerNotificationService buyerNotificationService;
 
     @MockBean
     private DeliveryAddressService deliveryAddressService;
@@ -171,6 +176,27 @@ class SecurityBoundaryTest {
                                 "addressLine", "Cebu",
                                 "defaultAddress", true))))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void buyerNotificationsWithFloristTokenReturnsForbidden() throws Exception {
+        authenticateToken("florist-token", florist());
+
+        mockMvc.perform(get("/api/users/notifications")
+                        .header("Authorization", "Bearer florist-token"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void buyerNotificationsWithBuyerTokenReturnsNotifications() throws Exception {
+        User buyer = buyer();
+        authenticateToken("buyer-token", buyer);
+        Mockito.when(buyerNotificationService.getNotifications(buyer, false)).thenReturn(List.of());
+
+        mockMvc.perform(get("/api/users/notifications")
+                        .header("Authorization", "Bearer buyer-token"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)));
     }
 
     @Test

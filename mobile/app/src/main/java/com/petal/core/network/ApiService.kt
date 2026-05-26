@@ -6,6 +6,7 @@ import com.petal.data.auth.LoginRequest
 import com.petal.data.auth.RegisterRequest
 import com.petal.data.account.DeliveryAddressRequest
 import com.petal.data.account.DeliveryAddressResponse
+import com.petal.data.account.BuyerNotificationResponse
 import com.petal.data.account.SavedDateRequest
 import com.petal.data.account.SavedDateResponse
 import com.petal.data.cart.AddCartItemRequest
@@ -21,6 +22,7 @@ import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
+import retrofit2.http.PATCH
 import retrofit2.http.POST
 import retrofit2.http.PUT
 import retrofit2.http.Path
@@ -89,4 +91,10 @@ interface ApiService {
 
     @POST("/api/users/dates")
     suspend fun createSavedDate(@Body request: SavedDateRequest): Response<ApiResponse<SavedDateResponse>>
+
+    @GET("/api/users/notifications")
+    suspend fun notifications(@Query("unreadOnly") unreadOnly: Boolean = false): Response<ApiResponse<List<BuyerNotificationResponse>>>
+
+    @PATCH("/api/users/notifications/{id}/read")
+    suspend fun markNotificationRead(@Path("id") id: Long): Response<ApiResponse<BuyerNotificationResponse>>
 }

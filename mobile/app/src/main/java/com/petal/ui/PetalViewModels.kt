@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.petal.data.account.BuyerAccountRepository
 import com.petal.data.account.BuyerAccountValidators
+import com.petal.data.account.BuyerNotificationResponse
 import com.petal.data.account.DeliveryAddressRequest
 import com.petal.data.account.DeliveryAddressResponse
 import com.petal.data.account.SavedDateRequest
@@ -233,12 +234,16 @@ data class OrderConfirmationUiState(
 data class BuyerAccountUiState(
     val addressesLoading: Boolean = false,
     val datesLoading: Boolean = false,
+    val notificationsLoading: Boolean = false,
     val addressActionLoading: Boolean = false,
     val dateActionLoading: Boolean = false,
+    val notificationActionLoadingId: Long? = null,
     val addresses: List<DeliveryAddressResponse> = emptyList(),
     val savedDates: List<SavedDateResponse> = emptyList(),
+    val notifications: List<BuyerNotificationResponse> = emptyList(),
     val addressesError: String? = null,
     val datesError: String? = null,
+    val notificationsError: String? = null,
     val addressSuccess: String? = null,
     val dateSuccess: String? = null,
     val addressLabel: String = "Home",
@@ -477,6 +482,7 @@ class BuyerAccountViewModel(private val repository: BuyerAccountRepository) : Vi
     fun load() {
         loadAddresses()
         loadSavedDates()
+        loadNotifications()
     }
 
     fun setAddressLabel(value: String) = _state.update { it.copy(addressLabel = value, addressesError = null) }
@@ -487,7 +493,15 @@ class BuyerAccountViewModel(private val repository: BuyerAccountRepository) : Vi
     fun setSavedDateLabel(value: String) = _state.update { it.copy(savedDateLabel = value, datesError = null) }
     fun setSavedDateEventDate(value: String) = _state.update { it.copy(savedDateEventDate = value, datesError = null) }
     fun setSavedDateRecurring(value: Boolean) = _state.update { it.copy(savedDateRecurring = value, datesError = null) }
-    fun clearMessages() = _state.update { it.copy(addressesError = null, datesError = null, addressSuccess = null, dateSuccess = null) }
+    fun clearMessages() = _state.update {
+        it.copy(
+            addressesError = null,
+            datesError = null,
+            notificationsError = null,
+            addressSuccess = null,
+            dateSuccess = null
+        )
+    }
 
     fun loadAddresses() {
         viewModelScope.launch {
@@ -507,6 +521,30 @@ class BuyerAccountViewModel(private val repository: BuyerAccountRepository) : Vi
                 .onSuccess { savedDates -> _state.update { it.copy(datesLoading = false, savedDates = savedDates) } }
                 .onFailure { failure ->
                     _state.update { it.copy(datesLoading = false, datesError = failure.message ?: "Unable to load important dates.") }
+                }
+        }
+    }
+
+    fun loadNotifications(unreadOnly: Boolean = false) {
+        viewModelScope.launch {
+            _state.update { it.copy(notificationsLoading = true, notificationsError = null) }
+            repository.notifications(unreadOnly)
+                .onSuccess { notifications ->
+                    _state.update {
+                        it.copy(
+                            notificationsLoading = false,
+                            notifications = notifications,
+                            notificationsError = null
+                        )
+                    }
+                }
+                .onFailure { failure ->
+                    _state.update {
+                        it.copy(
+                            notificationsLoading = false,
+                            notificationsError = failure.message ?: "Unable to load reminders."
+                        )
+                    }
                 }
         }
     }
@@ -658,6 +696,36 @@ class BuyerAccountViewModel(private val repository: BuyerAccountRepository) : Vi
                         it.copy(
                             dateActionLoading = false,
                             datesError = failure.message ?: "Unable to save important date."
+                        )
+                    }
+                }
+        }
+    }
+
+    fun markNotificationRead(notificationId: Long) {
+        viewModelScope.launch {
+            _state.update {
+                it.copy(
+                    notificationActionLoadingId = notificationId,
+                    notificationsError = null
+                )
+            }
+            repository.markNotificationRead(notificationId)
+                .onSuccess { updated ->
+                    _state.update { state ->
+                        state.copy(
+                            notificationActionLoadingId = null,
+                            notifications = state.notifications.map { notification ->
+                                if (notification.id == updated.id) updated else notification
+                            }
+                        )
+                    }
+                }
+                .onFailure { failure ->
+                    _state.update {
+                        it.copy(
+                            notificationActionLoadingId = null,
+                            notificationsError = failure.message ?: "Unable to update reminder."
                         )
                     }
                 }

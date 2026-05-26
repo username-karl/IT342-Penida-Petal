@@ -34,3 +34,16 @@ data class SavedDateResponse(
     val reminderDue: Boolean,
     val reminderSentForYear: Boolean
 )
+
+data class BuyerNotificationResponse(
+    val id: Long,
+    val type: String,
+    val title: String,
+    val message: String,
+    val savedDateId: Long?,
+    val eventDate: String?,
+    val notificationYear: Int?,
+    val read: Boolean,
+    val createdAt: String?,
+    val readAt: String?
+)

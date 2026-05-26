@@ -29,7 +29,7 @@ public class ImportantDateReminderScheduler {
                 .filter(savedDate -> isDue(savedDate, target))
                 .filter(savedDate -> savedDate.getNotifiedYear() == null || savedDate.getNotifiedYear() != targetYear)
                 .forEach(savedDate -> {
-                    notificationService.sendReminder(savedDate);
+                    notificationService.sendReminder(savedDate, targetYear);
                     savedDate.setNotifiedYear(targetYear);
                     savedDateRepository.save(savedDate);
                 });

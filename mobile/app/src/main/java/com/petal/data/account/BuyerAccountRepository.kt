@@ -91,6 +91,34 @@ class BuyerAccountRepository(private val apiService: ApiService) {
         }
     }
 
+    suspend fun notifications(unreadOnly: Boolean = false): Result<List<BuyerNotificationResponse>> {
+        return try {
+            val response = apiService.notifications(unreadOnly)
+            val body = response.body()
+            if (response.isSuccessful && body?.success == true) {
+                Result.success(body.data.orEmpty())
+            } else {
+                Result.failure(IllegalStateException(errorMessage(response.code(), body?.message, response.errorBody()?.string(), "Unable to load reminders.")))
+            }
+        } catch (exception: Exception) {
+            Result.failure(IllegalStateException("Connection failed. Check that the backend is running.", exception))
+        }
+    }
+
+    suspend fun markNotificationRead(id: Long): Result<BuyerNotificationResponse> {
+        return try {
+            val response = apiService.markNotificationRead(id)
+            val body = response.body()
+            if (response.isSuccessful && body?.success == true && body.data != null) {
+                Result.success(body.data)
+            } else {
+                Result.failure(IllegalStateException(errorMessage(response.code(), body?.message, response.errorBody()?.string(), "Unable to update reminder.")))
+            }
+        } catch (exception: Exception) {
+            Result.failure(IllegalStateException("Connection failed. Check that the backend is running.", exception))
+        }
+    }
+
     private fun errorMessage(statusCode: Int, message: String?, errorBody: String?, fallback: String): String {
         val backendMessage = message ?: parseErrorMessage(errorBody)
         return backendMessage ?: when (statusCode) {

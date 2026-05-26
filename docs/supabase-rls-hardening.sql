@@ -18,6 +18,7 @@ alter table public.orders enable row level security;
 alter table public.product_mood_tags enable row level security;
 alter table public.products enable row level security;
 alter table public.saved_dates enable row level security;
+alter table public.buyer_notifications enable row level security;
 alter table public.tracking_events enable row level security;
 alter table public.users enable row level security;
 
@@ -29,6 +30,7 @@ revoke all privileges on table public.orders from anon, authenticated, public;
 revoke all privileges on table public.product_mood_tags from anon, authenticated, public;
 revoke all privileges on table public.products from anon, authenticated, public;
 revoke all privileges on table public.saved_dates from anon, authenticated, public;
+revoke all privileges on table public.buyer_notifications from anon, authenticated, public;
 revoke all privileges on table public.tracking_events from anon, authenticated, public;
 revoke all privileges on table public.users from anon, authenticated, public;
 
@@ -39,6 +41,7 @@ revoke all privileges on sequence public.order_items_id_seq from anon, authentic
 revoke all privileges on sequence public.orders_id_seq from anon, authenticated, public;
 revoke all privileges on sequence public.products_id_seq from anon, authenticated, public;
 revoke all privileges on sequence public.saved_dates_id_seq from anon, authenticated, public;
+revoke all privileges on sequence public.buyer_notifications_id_seq from anon, authenticated, public;
 revoke all privileges on sequence public.tracking_events_id_seq from anon, authenticated, public;
 revoke all privileges on sequence public.users_id_seq from anon, authenticated, public;
 
