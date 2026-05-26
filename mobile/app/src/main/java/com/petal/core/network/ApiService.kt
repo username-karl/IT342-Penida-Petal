@@ -21,6 +21,9 @@ import com.petal.data.checkout.OrderResponse
 import com.petal.data.review.CreateReviewRequest
 import com.petal.data.review.ReviewResponse
 import com.petal.data.review.ReviewSummaryResponse
+import com.petal.data.messaging.ConversationResponse
+import com.petal.data.messaging.MessageResponse
+import com.petal.data.messaging.CreateMessageRequest
 import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.DELETE
@@ -110,4 +113,19 @@ interface ApiService {
         @Path("productId") productId: Long,
         @Body request: CreateReviewRequest
     ): Response<ApiResponse<ReviewResponse>>
+
+    @GET("/api/buyer/conversations")
+    suspend fun getConversations(): Response<ApiResponse<List<ConversationResponse>>>
+
+    @POST("/api/buyer/orders/{orderId}/conversation")
+    suspend fun startConversation(@Path("orderId") orderId: Long): Response<ApiResponse<ConversationResponse>>
+
+    @GET("/api/buyer/conversations/{conversationId}/messages")
+    suspend fun getMessages(@Path("conversationId") conversationId: Long): Response<ApiResponse<List<MessageResponse>>>
+
+    @POST("/api/buyer/conversations/{conversationId}/messages")
+    suspend fun sendMessage(
+        @Path("conversationId") conversationId: Long,
+        @Body request: CreateMessageRequest
+    ): Response<ApiResponse<MessageResponse>>
 }

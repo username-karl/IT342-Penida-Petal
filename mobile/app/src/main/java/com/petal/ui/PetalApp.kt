@@ -120,10 +120,13 @@ private object Routes {
     const val OrderConfirmation = "checkout/confirmation"
     const val OrderHistory = "orders"
     const val OrderDetail = "orders/{id}"
+    const val Inbox = "inbox"
+    const val Chat = "chat/{conversationId}"
 
     fun products(mood: String) = "products/${Uri.encode(mood)}"
     fun product(id: Long) = "product/$id"
     fun orderDetail(id: Long) = "orders/$id"
+    fun chat(conversationId: Long) = "chat/$conversationId"
 }
 
 @Composable
@@ -154,6 +157,9 @@ fun PetalApp() {
     )
     val reviewViewModel: ReviewViewModel = viewModel(
         factory = PetalViewModelFactory(reviewRepository = container.reviewRepository)
+    )
+    val messagingViewModel: com.petal.ui.messaging.MessagingViewModel = viewModel(
+        factory = com.petal.ui.messaging.MessagingViewModelFactory(container.messagingRepository)
     )
     val sessionViewModel: SessionViewModel = viewModel(
         factory = PetalViewModelFactory(sessionStore = container.sessionStore)
@@ -261,7 +267,8 @@ fun PetalApp() {
                         ) {
                             BuyerAccountScreen(
                                 viewModel = buyerAccountViewModel,
-                                onBack = { navigateTopLevel(Routes.Moods) }
+                                onBack = { navigateTopLevel(Routes.Moods) },
+                                onNavigateToInbox = { navController.navigate(Routes.Inbox) }
                             )
                         }
                     } else {
@@ -390,6 +397,38 @@ fun PetalApp() {
                             id = entry.arguments?.getLong("id") ?: 0L,
                             viewModel = orderHistoryViewModel,
                             reviewViewModel = reviewViewModel,
+                            messagingViewModel = messagingViewModel,
+                            onNavigateToChat = { convId -> navController.navigate(Routes.chat(convId)) },
+                            onBack = { navController.popBackStack() }
+                        )
+                    } else {
+                        BuyerAccessRequiredScreen(onBack = { navController.popBackStack() })
+                    }
+                }
+                composable(Routes.Inbox) {
+                    if (sessionViewModel.isBuyer) {
+                        BuyerTopLevelScaffold(
+                            currentRoute = Routes.Inbox,
+                            onNavigate = ::navigateTopLevel
+                        ) {
+                            com.petal.ui.messaging.InboxScreen(
+                                viewModel = messagingViewModel,
+                                onBack = { navigateTopLevel(Routes.Moods) },
+                                onConversation = { convId -> navController.navigate(Routes.chat(convId)) }
+                            )
+                        }
+                    } else {
+                        BuyerAccessRequiredScreen(onBack = { navController.popBackStack() })
+                    }
+                }
+                composable(
+                    route = Routes.Chat,
+                    arguments = listOf(navArgument("conversationId") { type = NavType.LongType })
+                ) { entry ->
+                    if (sessionViewModel.isBuyer) {
+                        com.petal.ui.messaging.ChatScreen(
+                            conversationId = entry.arguments?.getLong("conversationId") ?: 0L,
+                            viewModel = messagingViewModel,
                             onBack = { navController.popBackStack() }
                         )
                     } else {
@@ -1508,7 +1547,14 @@ private fun OrderHistoryCard(order: BuyerOrderResponse, onClick: () -> Unit) {
 }
 
 @Composable
-private fun OrderDetailScreen(id: Long, viewModel: OrderHistoryViewModel, reviewViewModel: ReviewViewModel, onBack: () -> Unit) {
+private fun OrderDetailScreen(
+    id: Long, 
+    viewModel: OrderHistoryViewModel, 
+    reviewViewModel: ReviewViewModel, 
+    messagingViewModel: com.petal.ui.messaging.MessagingViewModel,
+    onNavigateToChat: (Long) -> Unit,
+    onBack: () -> Unit
+) {
     val state by viewModel.state.collectAsState()
     val reviewState by reviewViewModel.state.collectAsState()
     LaunchedEffect(id) {
@@ -1527,7 +1573,11 @@ private fun OrderDetailScreen(id: Long, viewModel: OrderHistoryViewModel, review
                 order = state.selectedOrder!!,
                 detailError = state.detailError,
                 reviewState = reviewState,
-                onSubmitReview = reviewViewModel::submitReview
+                onSubmitReview = reviewViewModel::submitReview,
+                messagingState = messagingViewModel.uiState.collectAsState().value,
+                onMessageFlorist = { orderId ->
+                    messagingViewModel.startConversation(orderId, onNavigateToChat)
+                }
             )
         }
     }
@@ -1538,7 +1588,9 @@ private fun OrderDetailContent(
     order: BuyerOrderResponse,
     detailError: String?,
     reviewState: ReviewUiState,
-    onSubmitReview: (Long, Long, Int, Int, String?) -> Unit
+    onSubmitReview: (Long, Long, Int, Int, String?) -> Unit,
+    messagingState: com.petal.ui.messaging.MessagingUiState,
+    onMessageFlorist: (Long) -> Unit
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -1566,6 +1618,17 @@ private fun OrderDetailContent(
                         Text("Order ID ${order.id}", color = Stone700)
                     }
                     StatusBadge(order.status)
+                }
+                Spacer(Modifier.height(16.dp))
+                PetalPrimaryButton(
+                    text = "Message Florist",
+                    onClick = { onMessageFlorist(order.id) },
+                    loading = messagingState.isLoading,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                messagingState.error?.let {
+                    Spacer(Modifier.height(8.dp))
+                    ErrorBanner(it)
                 }
             }
         }

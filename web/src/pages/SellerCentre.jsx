@@ -21,10 +21,11 @@ import {
     Upload,
     Wallet,
     X,
+    MessageSquare,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import Grainient from '../components/Grainient';
-import { floristAPI, mediaUrl, ordersAPI, productsAPI, reviewsAPI } from '../services/api';
+import { floristAPI, mediaUrl, ordersAPI, productsAPI, reviewsAPI, sellerConversationsAPI } from '../services/api';
 import { Star } from 'lucide-react';
 
 const moodOptions = ['romance', 'celebration', 'sympathy', 'apology', 'calm', 'gratitude', 'wildflower'];
@@ -87,6 +88,7 @@ const navGroups = [
             { id: 'overview', label: 'Overview', icon: BarChart3 },
             { id: 'orders', label: 'Orders', icon: ClipboardList },
             { id: 'reviews', label: 'Customer Notes', icon: Star },
+            { id: 'messages', label: 'Messages', icon: MessageSquare },
         ],
     },
     {
@@ -216,6 +218,11 @@ export default function SellerCentre() {
     const [dailyCapacity, setDailyCapacity] = useState(12);
     const [updatingOrderId, setUpdatingOrderId] = useState(null);
 
+    const [conversations, setConversations] = useState([]);
+    const [activeConversationId, setActiveConversationId] = useState(null);
+    const [threadMessages, setThreadMessages] = useState([]);
+    const [messageInput, setMessageInput] = useState('');
+
     const isArtisan = user?.role === 'artisan' || user?.role === 'ARTISAN' || user?.role === 'ROLE_FLORIST';
 
     useEffect(() => {
@@ -273,6 +280,29 @@ export default function SellerCentre() {
             || product.moodTags?.some((tag) => tag.toLowerCase().includes(normalized))
         );
     }, [products, search]);
+
+    useEffect(() => {
+        if (activeTab === 'messages' && isArtisan) {
+            sellerConversationsAPI.getConversations()
+                .then(res => setConversations(res.data.data || []))
+                .catch(err => console.error('Failed to load conversations', err));
+        }
+    }, [activeTab, isArtisan]);
+
+    useEffect(() => {
+        if (activeTab === 'messages' && activeConversationId) {
+            const fetchMessages = () => {
+                sellerConversationsAPI.getMessages(activeConversationId)
+                    .then(res => setThreadMessages(res.data.data || []))
+                    .catch(console.error);
+            };
+            fetchMessages();
+            const interval = setInterval(fetchMessages, 10000);
+            return () => clearInterval(interval);
+        } else {
+            setThreadMessages([]);
+        }
+    }, [activeTab, activeConversationId]);
 
     const metrics = useMemo(() => {
         const liveCount = products.filter((product) => product.inStock).length;
@@ -475,6 +505,20 @@ export default function SellerCentre() {
             setError(apiErrorMessage(err, 'Unable to update order status'));
         } finally {
             setUpdatingOrderId(null);
+        }
+    };
+
+    const handleSendMessage = async (e) => {
+        e.preventDefault();
+        if (!messageInput.trim() || !activeConversationId) return;
+        
+        try {
+            await sellerConversationsAPI.sendMessage(activeConversationId, { content: messageInput.trim() });
+            setMessageInput('');
+            const res = await sellerConversationsAPI.getMessages(activeConversationId);
+            setThreadMessages(res.data.data || []);
+        } catch (err) {
+            console.error('Failed to send message', err);
         }
     };
 
@@ -1076,6 +1120,81 @@ export default function SellerCentre() {
                                 <Settings size={28} className="mx-auto text-stone-400" />
                                 <h2 className="mt-4 font-serif text-2xl">Seller Settings</h2>
                                 <p className="mt-2 text-sm text-stone-500">Delivery rules, payout details, and shop policies can plug in here next.</p>
+                            </div>
+                        )}
+
+                        {activeTab === 'messages' && (
+                            <div className="bg-[#FDFCF8] border border-stone-200 h-[600px] flex flex-col md:flex-row overflow-hidden shadow-sm">
+                                {/* Left Pane */}
+                                <div className="w-full md:w-1/3 border-b md:border-b-0 md:border-r border-stone-200 flex flex-col bg-white overflow-hidden">
+                                    <div className="p-4 border-b border-stone-100 bg-[#FDFCF8]">
+                                        <h2 className="font-serif text-xl text-stone-900">Conversations</h2>
+                                    </div>
+                                    <div className="flex-1 overflow-y-auto">
+                                        {conversations.map(conv => (
+                                            <button 
+                                                key={conv.id} 
+                                                onClick={() => setActiveConversationId(conv.id)}
+                                                className={`w-full text-left p-4 border-b border-stone-100 transition-colors block ${activeConversationId === conv.id ? 'bg-[#F4F1EA] border-l-2 border-l-stone-400' : 'hover:bg-stone-50'}`}
+                                            >
+                                                <p className="font-medium text-stone-900">{conv.buyerName || 'Buyer'}</p>
+                                                <p className="text-xs text-stone-500 mt-1 line-clamp-1">{conv.lastMessage || 'No messages yet'}</p>
+                                            </button>
+                                        ))}
+                                        {!conversations.length && (
+                                            <div className="p-8 text-center text-sm text-stone-400">No active conversations. Notes from buyers will appear here.</div>
+                                        )}
+                                    </div>
+                                </div>
+                                
+                                {/* Right Pane */}
+                                <div className="flex-1 flex flex-col bg-[#FDFCF8] overflow-hidden">
+                                    {activeConversationId ? (
+                                        <>
+                                            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                                                {threadMessages.map(msg => {
+                                                    const isSeller = msg.senderType === 'SELLER';
+                                                    return (
+                                                        <div key={msg.id} className={`flex flex-col ${isSeller ? 'items-end' : 'items-start'}`}>
+                                                            <div className="text-[10px] uppercase tracking-widest text-stone-400 mb-1">{isSeller ? shopName : 'Buyer'}</div>
+                                                            <div className={`p-4 max-w-[85%] text-sm leading-relaxed border ${isSeller ? 'bg-[#F4F1EA] border-[#E8E4D9] text-stone-800' : 'bg-white border-stone-200 text-stone-700'}`}>
+                                                                {msg.content}
+                                                            </div>
+                                                            <div className="text-[10px] text-stone-400 mt-1.5">
+                                                                {new Date(msg.createdAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+                                                            </div>
+                                                        </div>
+                                                    )
+                                                })}
+                                                {!threadMessages.length && (
+                                                    <div className="text-center text-sm text-stone-400 mt-10">Start the conversation...</div>
+                                                )}
+                                            </div>
+                                            <div className="p-4 border-t border-stone-200 bg-white">
+                                                <form onSubmit={handleSendMessage} className="flex gap-3">
+                                                    <input 
+                                                        type="text" 
+                                                        value={messageInput}
+                                                        onChange={e => setMessageInput(e.target.value)}
+                                                        placeholder="Write a note..." 
+                                                        className="flex-1 h-11 border border-stone-200 bg-stone-50 px-4 text-sm outline-none focus:border-stone-400"
+                                                    />
+                                                    <button 
+                                                        type="submit" 
+                                                        disabled={!messageInput.trim()}
+                                                        className="h-11 px-6 bg-stone-900 text-white text-sm font-semibold hover:bg-stone-800 disabled:opacity-50 transition-colors uppercase tracking-widest text-[11px]"
+                                                    >
+                                                        Send Note
+                                                    </button>
+                                                </form>
+                                            </div>
+                                        </>
+                                    ) : (
+                                        <div className="flex-1 flex items-center justify-center text-sm text-stone-400">
+                                            Select a conversation to read notes
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         )}
                     </section>

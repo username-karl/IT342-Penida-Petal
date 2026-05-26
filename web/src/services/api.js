@@ -127,4 +127,10 @@ export const reviewsAPI = {
     createReview: (orderId, productId, data) => api.post(`/orders/${orderId}/products/${productId}/reviews`, data),
 };
 
+export const sellerConversationsAPI = {
+    getConversations: () => api.get('/seller/conversations'),
+    getMessages: (id) => api.get(`/seller/conversations/${id}/messages`),
+    sendMessage: (id, data) => api.post(`/seller/conversations/${id}/messages`, data),
+};
+
 export default api;

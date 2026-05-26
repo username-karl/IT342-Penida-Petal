@@ -22,6 +22,8 @@ alter table public.buyer_notifications enable row level security;
 alter table public.tracking_events enable row level security;
 alter table public.users enable row level security;
 alter table public.reviews enable row level security;
+alter table public.conversations enable row level security;
+alter table public.messages enable row level security;
 
 revoke all privileges on table public.cart_items from anon, authenticated, public;
 revoke all privileges on table public.delivery_addresses from anon, authenticated, public;
@@ -35,6 +37,8 @@ revoke all privileges on table public.buyer_notifications from anon, authenticat
 revoke all privileges on table public.tracking_events from anon, authenticated, public;
 revoke all privileges on table public.users from anon, authenticated, public;
 revoke all privileges on table public.reviews from anon, authenticated, public;
+revoke all privileges on table public.conversations from anon, authenticated, public;
+revoke all privileges on table public.messages from anon, authenticated, public;
 
 revoke all privileges on sequence public.cart_items_id_seq from anon, authenticated, public;
 revoke all privileges on sequence public.delivery_addresses_id_seq from anon, authenticated, public;
@@ -47,6 +51,8 @@ revoke all privileges on sequence public.buyer_notifications_id_seq from anon, a
 revoke all privileges on sequence public.tracking_events_id_seq from anon, authenticated, public;
 revoke all privileges on sequence public.users_id_seq from anon, authenticated, public;
 revoke all privileges on sequence public.reviews_id_seq from anon, authenticated, public;
+revoke all privileges on sequence public.conversations_id_seq from anon, authenticated, public;
+revoke all privileges on sequence public.messages_id_seq from anon, authenticated, public;
 
 revoke execute on all functions in schema public from anon, authenticated, public;
 

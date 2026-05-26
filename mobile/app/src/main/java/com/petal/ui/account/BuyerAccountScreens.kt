@@ -52,6 +52,7 @@ import com.petal.ui.theme.SurfaceWarm
 fun BuyerAccountScreen(
     viewModel: BuyerAccountViewModel,
     onBack: () -> Unit,
+    onNavigateToInbox: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val state by viewModel.state.collectAsState()
@@ -70,6 +71,19 @@ fun BuyerAccountScreen(
                 .padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
+            AccountPanel(eyebrow = "Messages", title = "Florist Inbox", tint = SageSoft) {
+                Text(
+                    "View messages from florists about your orders.",
+                    color = Stone700,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Spacer(Modifier.height(16.dp))
+                PetalPrimaryButton(
+                    text = "Open Inbox",
+                    onClick = onNavigateToInbox,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
             AddressBookSection(state = state, viewModel = viewModel)
             NotificationSection(state = state, viewModel = viewModel)
             ImportantDatesSection(state = state, viewModel = viewModel)
