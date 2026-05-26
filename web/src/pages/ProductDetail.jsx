@@ -4,7 +4,7 @@ import {
     ArrowLeft, Heart, Leaf, MapPin, MessageCircle, Minus, Package,
     Plus, ShieldCheck, ShoppingBag, Star, Store, Truck
 } from 'lucide-react';
-import { cartAPI, mediaUrl, productsAPI } from '../services/api';
+import { cartAPI, mediaUrl, productsAPI, reviewsAPI } from '../services/api';
 
 const fallbackGallery = [
     '/images/product_pampas_1771726515735.png',
@@ -25,6 +25,7 @@ export default function ProductDetail() {
     const [cartError, setCartError] = useState('');
     const [addingToCart, setAddingToCart] = useState(false);
     const [floristLogoBroken, setFloristLogoBroken] = useState(false);
+    const [reviews, setReviews] = useState({ averageRating: 0, totalReviews: 0, recentReviews: [] });
 
     useEffect(() => {
         const fetchProduct = async () => {
@@ -36,6 +37,13 @@ export default function ProductDetail() {
                 const nextProduct = response.data.data;
                 setProduct(nextProduct);
                 setActiveImage(nextProduct?.imageUrl || '');
+                
+                try {
+                    const reviewsRes = await reviewsAPI.getProductReviews(id);
+                    setReviews(reviewsRes.data.data);
+                } catch (rErr) {
+                    console.error('Failed to load reviews', rErr);
+                }
             } catch (err) {
                 setError(err.response?.data?.message || err.message || 'Unable to load product');
             } finally {
@@ -159,7 +167,10 @@ export default function ProductDetail() {
                                 </h1>
 
                                 <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-stone-500 mb-5">
-                                    <span className="italic text-stone-400">Reviews are not enabled in this build.</span>
+                                    <span className="flex items-center gap-1 text-stone-600">
+                                        <Star size={16} strokeWidth={1.5} className={reviews.totalReviews > 0 ? "fill-current text-stone-800" : ""} />
+                                        {reviews.totalReviews > 0 ? `${reviews.averageRating.toFixed(1)} · ${reviews.totalReviews} honest notes` : 'No reviews yet'}
+                                    </span>
                                     <span className={product.inStock ? 'text-green-700' : 'text-red-700'}>
                                         {product.inStock ? 'In stock' : 'Out of stock'}
                                     </span>
@@ -288,6 +299,32 @@ export default function ProductDetail() {
                                     </div>
                                 </dl>
                             </div>
+                        </section>
+
+                        <section className="bg-white/80 border border-stone-200 p-6 md:p-8">
+                            <h2 className="text-3xl font-serif text-stone-900 mb-6">Honest Notes</h2>
+                            {reviews.totalReviews > 0 ? (
+                                <div className="space-y-6">
+                                    {reviews.recentReviews.map((review) => (
+                                        <div key={review.id} className="border-b border-stone-100 pb-6 last:border-0 last:pb-0">
+                                            <div className="flex items-center justify-between mb-2">
+                                                <span className="font-medium text-sm text-stone-900">{review.reviewerName}</span>
+                                                <span className="text-sm font-medium text-stone-600">{review.productRating}/5</span>
+                                            </div>
+                                            {review.comment && (
+                                                <p className="text-stone-600 leading-relaxed">{review.comment}</p>
+                                            )}
+                                        </div>
+                                    ))}
+                                    {reviews.totalReviews > reviews.recentReviews.length && (
+                                        <button className="text-sm font-medium border-b border-stone-400 pb-0.5 hover:text-stone-600">
+                                            Read All Reviews
+                                        </button>
+                                    )}
+                                </div>
+                            ) : (
+                                <p className="text-stone-500 italic">No notes yet for this arrangement.</p>
+                            )}
                         </section>
                     </div>
                 )}

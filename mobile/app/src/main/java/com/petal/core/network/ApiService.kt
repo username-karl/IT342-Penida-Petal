@@ -18,6 +18,9 @@ import com.petal.data.checkout.CreateOrderRequest
 import com.petal.data.checkout.BuyerOrderResponse
 import com.petal.data.checkout.DeliverySlotAvailabilityResponse
 import com.petal.data.checkout.OrderResponse
+import com.petal.data.review.CreateReviewRequest
+import com.petal.data.review.ReviewResponse
+import com.petal.data.review.ReviewSummaryResponse
 import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.DELETE
@@ -97,4 +100,14 @@ interface ApiService {
 
     @PATCH("/api/users/notifications/{id}/read")
     suspend fun markNotificationRead(@Path("id") id: Long): Response<ApiResponse<BuyerNotificationResponse>>
+
+    @GET("/api/products/{id}/reviews")
+    suspend fun getProductReviews(@Path("id") productId: Long): Response<ApiResponse<ReviewSummaryResponse>>
+
+    @POST("/api/orders/{orderId}/products/{productId}/reviews")
+    suspend fun createReview(
+        @Path("orderId") orderId: Long,
+        @Path("productId") productId: Long,
+        @Body request: CreateReviewRequest
+    ): Response<ApiResponse<ReviewResponse>>
 }

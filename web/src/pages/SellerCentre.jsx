@@ -24,7 +24,8 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import Grainient from '../components/Grainient';
-import { floristAPI, mediaUrl, ordersAPI, productsAPI } from '../services/api';
+import { floristAPI, mediaUrl, ordersAPI, productsAPI, reviewsAPI } from '../services/api';
+import { Star } from 'lucide-react';
 
 const moodOptions = ['romance', 'celebration', 'sympathy', 'apology', 'calm', 'gratitude', 'wildflower'];
 
@@ -85,6 +86,7 @@ const navGroups = [
         items: [
             { id: 'overview', label: 'Overview', icon: BarChart3 },
             { id: 'orders', label: 'Orders', icon: ClipboardList },
+            { id: 'reviews', label: 'Customer Notes', icon: Star },
         ],
     },
     {
@@ -195,6 +197,7 @@ export default function SellerCentre() {
     const [activeTab, setActiveTab] = useState(initialTab);
     const [products, setProducts] = useState([]);
     const [orders, setOrders] = useState([]);
+    const [floristReviews, setFloristReviews] = useState({ averageRating: 0, totalReviews: 0, recentReviews: [] });
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [search, setSearch] = useState('');
@@ -234,6 +237,14 @@ export default function SellerCentre() {
                 const florist = floristResponse.data.data;
                 setProducts(productsResponse.data.data || []);
                 setOrders(ordersResponse.data.data || []);
+                
+                try {
+                    const reviewsResponse = await reviewsAPI.getFloristReviews(florist.id);
+                    setFloristReviews(reviewsResponse.data.data);
+                } catch (rErr) {
+                    console.error('Unable to fetch florist reviews', rErr);
+                }
+
                 setShopName(florist.storeName || (user?.name ? `${user.name}'s Studio` : 'My Floral Studio'));
                 setShopBio(florist.bio || 'Locally composed preserved floral pieces for thoughtful Cebu gifting, prepared with careful wrapping and delivery-ready notes.');
                 setShopCity(florist.city || 'Cebu, Philippines');
@@ -274,9 +285,9 @@ export default function SellerCentre() {
         return [
             { label: 'Live Listings', value: liveCount, helper: `${soldOutCount} paused or sold out`, icon: Package },
             { label: 'Orders to Prepare', value: actionableOrders.length, helper: `${dueToday} deliveries due today`, icon: Truck },
-            { label: 'Catalog Value', value: currency(inventoryValue), helper: 'Current listed assortment', icon: Wallet },
+            { label: 'Average Studio Rating', value: floristReviews.averageRating ? floristReviews.averageRating.toFixed(1) : '—', helper: `${floristReviews.totalReviews} total customer notes`, icon: Star },
         ];
-    }, [orders, products]);
+    }, [orders, products, floristReviews]);
 
     const orderBoardColumns = useMemo(() => {
         const grouped = orders.reduce((acc, order) => {
@@ -790,6 +801,41 @@ export default function SellerCentre() {
                                         No seller orders yet. Customer checkout orders will land here once they include your products.
                                     </div>
                                 )}
+                            </div>
+                        )}
+
+                        {activeTab === 'reviews' && (
+                            <div className="bg-white border border-stone-200">
+                                <div className="p-5 border-b border-stone-100">
+                                    <h2 className="font-serif text-2xl text-stone-900 mb-1">Customer Notes</h2>
+                                    <p className="text-sm text-stone-500">Honest reviews from completed deliveries.</p>
+                                </div>
+                                <div className="p-5">
+                                    {floristReviews.totalReviews > 0 ? (
+                                        <div className="space-y-6">
+                                            {floristReviews.recentReviews.map((review) => (
+                                                <div key={review.id} className="border-b border-stone-100 pb-6 last:border-0 last:pb-0">
+                                                    <div className="flex items-start justify-between mb-2">
+                                                        <div>
+                                                            <span className="font-medium text-sm text-stone-900">{review.reviewerName}</span>
+                                                            <span className="text-xs text-stone-500 block mt-0.5">Rating: {review.floristRating}/5</span>
+                                                        </div>
+                                                        <span className="text-xs uppercase tracking-widest text-stone-400">
+                                                            {new Date(review.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                                        </span>
+                                                    </div>
+                                                    {review.comment && (
+                                                        <p className="text-stone-600 leading-relaxed mt-2">{review.comment}</p>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <div className="border border-dashed border-stone-300 bg-stone-50 px-5 py-12 text-center text-stone-500">
+                                            No customer notes yet. Notes will appear here once buyers review your completed deliveries.
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         )}
 

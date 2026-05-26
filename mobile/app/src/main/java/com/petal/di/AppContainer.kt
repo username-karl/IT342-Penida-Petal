@@ -10,6 +10,7 @@ import com.petal.data.cart.CartRepository
 import com.petal.data.catalog.CatalogRepository
 import com.petal.data.checkout.CheckoutRepository
 import com.petal.data.checkout.OrderRepository
+import com.petal.data.review.ReviewRepository
 
 class AppContainer(context: Context) {
     val sessionStore: SessionStore = EncryptedSessionStore(context)
@@ -21,4 +22,5 @@ class AppContainer(context: Context) {
     val checkoutRepository = CheckoutRepository(apiService)
     val orderRepository = OrderRepository(apiService)
     val buyerAccountRepository = BuyerAccountRepository(apiService)
+    val reviewRepository = ReviewRepository(apiService)
 }

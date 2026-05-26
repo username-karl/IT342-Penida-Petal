@@ -26,6 +26,9 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -148,6 +151,9 @@ fun PetalApp() {
     )
     val buyerAccountViewModel: BuyerAccountViewModel = viewModel(
         factory = PetalViewModelFactory(buyerAccountRepository = container.buyerAccountRepository)
+    )
+    val reviewViewModel: ReviewViewModel = viewModel(
+        factory = PetalViewModelFactory(reviewRepository = container.reviewRepository)
     )
     val sessionViewModel: SessionViewModel = viewModel(
         factory = PetalViewModelFactory(sessionStore = container.sessionStore)
@@ -292,6 +298,7 @@ fun PetalApp() {
                         id = entry.arguments?.getLong("id") ?: 0L,
                         viewModel = catalogViewModel,
                         cartViewModel = cartViewModel,
+                        reviewViewModel = reviewViewModel,
                         navController = navController
                     )
                 }
@@ -382,6 +389,7 @@ fun PetalApp() {
                         OrderDetailScreen(
                             id = entry.arguments?.getLong("id") ?: 0L,
                             viewModel = orderHistoryViewModel,
+                            reviewViewModel = reviewViewModel,
                             onBack = { navController.popBackStack() }
                         )
                     } else {
@@ -825,12 +833,15 @@ private fun ProductDetailScreen(
     id: Long,
     viewModel: CatalogViewModel,
     cartViewModel: CartViewModel,
+    reviewViewModel: ReviewViewModel,
     navController: NavHostController
 ) {
     val state by viewModel.state.collectAsState()
     val cartState by cartViewModel.state.collectAsState()
+    val reviewState by reviewViewModel.state.collectAsState()
     LaunchedEffect(id) {
         viewModel.loadProduct(id)
+        reviewViewModel.loadProductReviews(id)
         cartViewModel.clearMessages()
     }
 
@@ -848,6 +859,7 @@ private fun ProductDetailScreen(
             state.selectedProduct != null -> ProductDetailContent(
                 product = state.selectedProduct!!,
                 cartState = cartState,
+                reviewState = reviewState,
                 onAddToCart = { cartViewModel.addProduct(state.selectedProduct!!.id) },
                 onViewCart = { navController.navigate(Routes.Cart) }
             )
@@ -860,6 +872,7 @@ private fun ProductDetailScreen(
 private fun ProductDetailContent(
     product: ProductResponse,
     cartState: CartUiState,
+    reviewState: ReviewUiState,
     onAddToCart: () -> Unit,
     onViewCart: () -> Unit
 ) {
@@ -897,6 +910,9 @@ private fun ProductDetailContent(
         }
         item {
             InfoPanel(title = "Product Description", body = product.description)
+        }
+        item {
+            ReviewsPanel(reviewState = reviewState)
         }
         item {
             Column(
@@ -1492,10 +1508,12 @@ private fun OrderHistoryCard(order: BuyerOrderResponse, onClick: () -> Unit) {
 }
 
 @Composable
-private fun OrderDetailScreen(id: Long, viewModel: OrderHistoryViewModel, onBack: () -> Unit) {
+private fun OrderDetailScreen(id: Long, viewModel: OrderHistoryViewModel, reviewViewModel: ReviewViewModel, onBack: () -> Unit) {
     val state by viewModel.state.collectAsState()
+    val reviewState by reviewViewModel.state.collectAsState()
     LaunchedEffect(id) {
         viewModel.loadOrder(id)
+        reviewViewModel.resetSubmitState()
     }
 
     Column(Modifier.fillMaxSize().background(Paper)) {
@@ -1505,13 +1523,23 @@ private fun OrderDetailScreen(id: Long, viewModel: OrderHistoryViewModel, onBack
         when {
             state.detailLoading && state.selectedOrder == null -> LoadingProductGrid(Modifier.padding(20.dp))
             state.detailError != null && state.selectedOrder == null -> ErrorBanner(state.detailError.orEmpty(), Modifier.padding(20.dp))
-            state.selectedOrder != null -> OrderDetailContent(order = state.selectedOrder!!, detailError = state.detailError)
+            state.selectedOrder != null -> OrderDetailContent(
+                order = state.selectedOrder!!,
+                detailError = state.detailError,
+                reviewState = reviewState,
+                onSubmitReview = reviewViewModel::submitReview
+            )
         }
     }
 }
 
 @Composable
-private fun OrderDetailContent(order: BuyerOrderResponse, detailError: String?) {
+private fun OrderDetailContent(
+    order: BuyerOrderResponse,
+    detailError: String?,
+    reviewState: ReviewUiState,
+    onSubmitReview: (Long, Long, Int, Int, String?) -> Unit
+) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(20.dp),
@@ -1612,6 +1640,15 @@ private fun OrderDetailContent(order: BuyerOrderResponse, detailError: String?) 
         if (OrderTrackingTimeline.isDelivered(order.status) && !proofImageUrl.isNullOrBlank()) {
             item {
                 OrderProofImageCard(imageUrl = proofImageUrl)
+            }
+        }
+        if (OrderTrackingTimeline.isDelivered(order.status) && order.items.isNotEmpty()) {
+            item {
+                SubmitReviewPanel(
+                    order = order,
+                    reviewState = reviewState,
+                    onSubmitReview = onSubmitReview
+                )
             }
         }
     }
@@ -2051,5 +2088,140 @@ private fun InfoPanel(title: String, body: String) {
         Text(title, style = MaterialTheme.typography.headlineSmall)
         Spacer(Modifier.height(8.dp))
         Text(body, color = Stone700, style = MaterialTheme.typography.bodyMedium)
+    }
+}
+
+@Composable
+private fun ReviewsPanel(reviewState: ReviewUiState) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(SurfaceWarm, RoundedCornerShape(4.dp))
+            .border(1.dp, Stone200, RoundedCornerShape(4.dp))
+            .padding(18.dp)
+    ) {
+        Text("Reviews", style = MaterialTheme.typography.titleLarge)
+        Spacer(Modifier.height(12.dp))
+        when {
+            reviewState.loading -> Text("Loading reviews...", color = Stone500, style = MaterialTheme.typography.bodyMedium)
+            reviewState.error != null -> Text("Unable to load reviews", color = Stone500, style = MaterialTheme.typography.bodyMedium)
+            reviewState.summary != null -> {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(String.format(java.util.Locale.getDefault(), "%.1f", reviewState.summary.averageRating), style = MaterialTheme.typography.displayMedium)
+                    Column {
+                        Row {
+                            repeat(5) { i ->
+                                Text("★", color = if (i < reviewState.summary.averageRating.toInt()) Stone950 else Stone200)
+                            }
+                        }
+                        Text("${reviewState.summary.totalReviews} review${if (reviewState.summary.totalReviews == 1L) "" else "s"}", color = Stone500, style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+                if (reviewState.summary.recentReviews.isNotEmpty()) {
+                    Spacer(Modifier.height(16.dp))
+                    Spacer(Modifier.fillMaxWidth().height(1.dp).background(Stone200))
+                    Spacer(Modifier.height(16.dp))
+                    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                        reviewState.summary.recentReviews.forEach { review ->
+                            Column {
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    Text(review.reviewerName, color = Stone950, fontWeight = FontWeight.SemiBold)
+                                    Text(review.createdAt.substringBefore("T"), color = Stone500, style = MaterialTheme.typography.labelSmall)
+                                }
+                                Row {
+                                    repeat(5) { i ->
+                                        Text("★", color = if (i < review.productRating) Stone950 else Stone200, style = MaterialTheme.typography.labelSmall)
+                                    }
+                                }
+                                if (!review.comment.isNullOrBlank()) {
+                                    Spacer(Modifier.height(4.dp))
+                                    Text(review.comment, color = Stone700, style = MaterialTheme.typography.bodyMedium)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SubmitReviewPanel(
+    order: BuyerOrderResponse,
+    reviewState: ReviewUiState,
+    onSubmitReview: (Long, Long, Int, Int, String?) -> Unit
+) {
+    var productRating by remember { mutableStateOf(0) }
+    var floristRating by remember { mutableStateOf(0) }
+    var comment by remember { mutableStateOf("") }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(SurfaceWarm, RoundedCornerShape(4.dp))
+            .border(1.dp, Stone200, RoundedCornerShape(4.dp))
+            .padding(18.dp)
+    ) {
+        Text("Rate your experience", style = MaterialTheme.typography.titleLarge)
+        Spacer(Modifier.height(12.dp))
+        
+        if (reviewState.submittedReview != null) {
+            SuccessBanner("Thank you for your review!")
+        } else {
+            Text("Product Rating", style = MaterialTheme.typography.labelSmall)
+            Row(modifier = Modifier.padding(vertical = 8.dp)) {
+                repeat(5) { index ->
+                    Text(
+                        text = "★",
+                        modifier = Modifier
+                            .clickable { productRating = index + 1 }
+                            .padding(4.dp),
+                        style = MaterialTheme.typography.headlineMedium,
+                        color = if (index < productRating) Stone950 else Stone200
+                    )
+                }
+            }
+            
+            Spacer(Modifier.height(8.dp))
+            Text("Florist Rating", style = MaterialTheme.typography.labelSmall)
+            Row(modifier = Modifier.padding(vertical = 8.dp)) {
+                repeat(5) { index ->
+                    Text(
+                        text = "★",
+                        modifier = Modifier
+                            .clickable { floristRating = index + 1 }
+                            .padding(4.dp),
+                        style = MaterialTheme.typography.headlineMedium,
+                        color = if (index < floristRating) Stone950 else Stone200
+                    )
+                }
+            }
+            
+            Spacer(Modifier.height(12.dp))
+            PetalTextField(
+                label = "Comment (Optional)",
+                value = comment,
+                onValueChange = { comment = it },
+                singleLine = false
+            )
+            
+            reviewState.submitError?.let { err ->
+                Spacer(Modifier.height(8.dp))
+                ErrorBanner(err)
+            }
+            
+            Spacer(Modifier.height(16.dp))
+            PetalPrimaryButton(
+                text = "Submit Review",
+                onClick = { 
+                    val productId = order.items.firstOrNull()?.productId ?: return@PetalPrimaryButton
+                    onSubmitReview(order.id, productId, productRating, floristRating, comment.takeIf { it.isNotBlank() })
+                },
+                enabled = productRating > 0 && floristRating > 0 && !reviewState.submitLoading,
+                loading = reviewState.submitLoading,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
     }
 }

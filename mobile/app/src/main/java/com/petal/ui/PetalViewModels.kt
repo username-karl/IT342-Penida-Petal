@@ -29,6 +29,9 @@ import com.petal.data.checkout.BuyerOrderResponse
 import com.petal.data.checkout.DeliverySlotAvailabilityResponse
 import com.petal.data.checkout.OrderResponse
 import com.petal.data.checkout.OrderRepository
+import com.petal.data.review.ReviewRepository
+import com.petal.data.review.ReviewResponse
+import com.petal.data.review.ReviewSummaryResponse
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -811,6 +814,50 @@ class CatalogViewModel(private val repository: CatalogRepository) : ViewModel() 
     }
 }
 
+data class ReviewUiState(
+    val loading: Boolean = false,
+    val submitLoading: Boolean = false,
+    val error: String? = null,
+    val submitError: String? = null,
+    val summary: ReviewSummaryResponse? = null,
+    val submittedReview: ReviewResponse? = null
+)
+
+class ReviewViewModel(private val repository: ReviewRepository) : ViewModel() {
+    private val _state = MutableStateFlow(ReviewUiState())
+    val state: StateFlow<ReviewUiState> = _state.asStateFlow()
+
+    fun loadProductReviews(productId: Long) {
+        viewModelScope.launch {
+            _state.update { it.copy(loading = true, error = null) }
+            repository.getProductReviews(productId)
+                .onSuccess { summary ->
+                    _state.update { it.copy(loading = false, summary = summary) }
+                }
+                .onFailure { failure ->
+                    _state.update { it.copy(loading = false, error = failure.message ?: "Unable to load reviews.") }
+                }
+        }
+    }
+
+    fun submitReview(orderId: Long, productId: Long, productRating: Int, floristRating: Int, comment: String?) {
+        viewModelScope.launch {
+            _state.update { it.copy(submitLoading = true, submitError = null) }
+            repository.createReview(orderId, productId, productRating, floristRating, comment)
+                .onSuccess { review ->
+                    _state.update { it.copy(submitLoading = false, submittedReview = review) }
+                }
+                .onFailure { failure ->
+                    _state.update { it.copy(submitLoading = false, submitError = failure.message ?: "Unable to submit review.") }
+                }
+        }
+    }
+
+    fun resetSubmitState() {
+        _state.update { it.copy(submitError = null, submittedReview = null) }
+    }
+}
+
 class SessionViewModel(private val sessionStore: SessionStore) : ViewModel() {
     val hasToken: Boolean = sessionStore.token() != null
     val displayName: String = sessionStore.userName()?.substringBefore(" ") ?: "Buyer"
@@ -828,6 +875,7 @@ class PetalViewModelFactory(
     private val checkoutRepository: CheckoutRepository? = null,
     private val orderRepository: OrderRepository? = null,
     private val buyerAccountRepository: BuyerAccountRepository? = null,
+    private val reviewRepository: ReviewRepository? = null,
     private val sessionStore: SessionStore? = null
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
@@ -845,6 +893,8 @@ class PetalViewModelFactory(
                 OrderHistoryViewModel(requireNotNull(orderRepository)) as T
             modelClass.isAssignableFrom(BuyerAccountViewModel::class.java) ->
                 BuyerAccountViewModel(requireNotNull(buyerAccountRepository)) as T
+            modelClass.isAssignableFrom(ReviewViewModel::class.java) ->
+                ReviewViewModel(requireNotNull(reviewRepository)) as T
             modelClass.isAssignableFrom(SessionViewModel::class.java) ->
                 SessionViewModel(requireNotNull(sessionStore)) as T
             else -> throw IllegalArgumentException("Unknown ViewModel ${modelClass.name}")

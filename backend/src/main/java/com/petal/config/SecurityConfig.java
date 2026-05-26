@@ -50,7 +50,9 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/slots/availability").hasRole("BUYER")
                         .requestMatchers(HttpMethod.GET, "/api/orders/**").hasRole("BUYER")
                         .requestMatchers(HttpMethod.POST, "/api/orders").hasRole("BUYER")
+                        .requestMatchers(HttpMethod.POST, "/api/orders/*/products/*/reviews").hasRole("BUYER")
                         .requestMatchers(HttpMethod.GET, "/api/products/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/florists/**").permitAll()
                         .anyRequest().authenticated())
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
 

@@ -121,4 +121,10 @@ export const ordersAPI = {
     },
 };
 
+export const reviewsAPI = {
+    getProductReviews: (productId, params) => api.get(`/products/${productId}/reviews`, { params }),
+    getFloristReviews: (floristId, params) => api.get(`/florists/${floristId}/reviews`, { params }),
+    createReview: (orderId, productId, data) => api.post(`/orders/${orderId}/products/${productId}/reviews`, data),
+};
+
 export default api;
