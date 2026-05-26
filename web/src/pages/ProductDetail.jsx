@@ -159,12 +159,7 @@ export default function ProductDetail() {
                                 </h1>
 
                                 <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-stone-500 mb-5">
-                                    <span className="inline-flex items-center gap-1 text-stone-800">
-                                        <Star size={15} fill="currentColor" strokeWidth={1.5} />
-                                        4.9
-                                    </span>
-                                    <span>128 ratings</span>
-                                    <span>342 sold</span>
+                                    <span className="italic text-stone-400">Reviews are not enabled in this build.</span>
                                     <span className={product.inStock ? 'text-green-700' : 'text-red-700'}>
                                         {product.inStock ? 'In stock' : 'Out of stock'}
                                     </span>
@@ -258,23 +253,9 @@ export default function ProductDetail() {
                                     </p>
                                 </div>
                             </div>
-                            <div className="grid grid-cols-3 gap-6 text-center text-sm">
-                                <div>
-                                    <p className="font-medium text-stone-900">97%</p>
-                                    <p className="text-xs text-stone-500">Positive</p>
-                                </div>
-                                <div>
-                                    <p className="font-medium text-stone-900">1.2k</p>
-                                    <p className="text-xs text-stone-500">Followers</p>
-                                </div>
-                                <div>
-                                    <p className="font-medium text-stone-900">2 hrs</p>
-                                    <p className="text-xs text-stone-500">Response</p>
-                                </div>
-                            </div>
-                            <button type="button" className="inline-flex items-center justify-center gap-2 h-10 px-5 border border-stone-300 text-sm font-medium text-stone-700 hover:border-stone-900 hover:text-stone-900">
+                            <button type="button" disabled className="inline-flex items-center justify-center gap-2 h-10 px-5 border border-stone-200 bg-stone-50 text-sm font-medium text-stone-400 cursor-not-allowed">
                                 <MessageCircle size={16} strokeWidth={1.5} />
-                                Chat Shop
+                                Messaging not enabled
                             </button>
                         </section>
 
