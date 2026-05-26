@@ -27,4 +27,20 @@ class OrderDisplayFormattersTest {
         assertEquals("Not provided", OrderDisplayFormatters.orFallback(null))
         assertEquals("AM", OrderDisplayFormatters.orFallback(" AM "))
     }
+
+    @Test
+    fun nullStatusFallsBackToPending() {
+        assertEquals("Pending", OrderDisplayFormatters.statusLabel(null))
+    }
+
+    @Test
+    fun emptyStatusFallsBackToPending() {
+        assertEquals("Pending", OrderDisplayFormatters.statusLabel(""))
+        assertEquals("Pending", OrderDisplayFormatters.statusLabel("   "))
+    }
+
+    @Test
+    fun nullPesoValueFallsBackToNotProvided() {
+        assertEquals("Not provided", OrderDisplayFormatters.formatOptionalPeso(null))
+    }
 }

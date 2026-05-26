@@ -80,6 +80,8 @@ import com.petal.ui.theme.Stone500
 import com.petal.ui.theme.Stone700
 import com.petal.ui.theme.Stone950
 import com.petal.ui.theme.SurfaceWarm
+import com.petal.ui.theme.Stone100
+import androidx.compose.foundation.layout.width
 import androidx.compose.ui.platform.LocalContext
 import coil.compose.AsyncImage
 import androidx.compose.foundation.border
@@ -1440,28 +1442,52 @@ private fun OrderHistoryScreen(
 
 @Composable
 private fun OrderHistoryCard(order: BuyerOrderResponse, onClick: () -> Unit) {
-    Column(
+    val thumbnailUrl = order.items.firstOrNull()?.imageUrl
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(4.dp))
+            .clip(RoundedCornerShape(8.dp))
             .clickable(onClick = onClick)
-            .background(SurfaceWarm, RoundedCornerShape(4.dp))
-            .border(1.dp, Stone200, RoundedCornerShape(4.dp))
-            .padding(18.dp)
+            .background(SurfaceWarm, RoundedCornerShape(8.dp))
+            .border(1.dp, Stone200, RoundedCornerShape(8.dp))
+            .padding(14.dp),
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+        verticalAlignment = Alignment.Top
     ) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(order.orderNumber ?: "Order #${order.id}", style = MaterialTheme.typography.titleLarge)
-                Text(order.itemSummary ?: "Petal gift order", color = Stone500, style = MaterialTheme.typography.bodyMedium)
+        // Bouquet thumbnail
+        AsyncImage(
+            model = thumbnailUrl,
+            contentDescription = "Gift thumbnail",
+            contentScale = ContentScale.Crop,
+            modifier = Modifier
+                .size(64.dp)
+                .clip(RoundedCornerShape(6.dp))
+                .background(Stone100, RoundedCornerShape(6.dp))
+                .border(1.dp, Stone200, RoundedCornerShape(6.dp))
+        )
+        Column(Modifier.weight(1f)) {
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
+            ) {
+                Text(
+                    order.orderNumber ?: "Order #${order.id}",
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.weight(1f)
+                )
+                Spacer(Modifier.width(8.dp))
+                StatusBadge(order.status)
             }
-            StatusBadge(order.status)
+            Text(
+                order.itemSummary ?: "Petal gift order",
+                color = Stone500,
+                style = MaterialTheme.typography.bodyMedium
+            )
+            Spacer(Modifier.height(10.dp))
+            SummaryRow("Delivery", OrderDisplayFormatters.orFallback(order.deliveryDate, "Not set"))
+            SummaryRow("Slot", OrderDisplayFormatters.orFallback(order.timeSlot, "Not set"))
         }
-        Spacer(Modifier.height(14.dp))
-        SummaryRow("Order ID", order.id.toString())
-        SummaryRow("Delivery Date", OrderDisplayFormatters.orFallback(order.deliveryDate, "Not set"))
-        SummaryRow("Time Slot", OrderDisplayFormatters.orFallback(order.timeSlot, "Not set"))
-        SummaryRow("Total", OrderDisplayFormatters.formatOptionalPeso(order.totalAmount))
-        SummaryRow("Payment Method", OrderDisplayFormatters.orFallback(order.paymentMethod))
     }
 }
 
@@ -1516,15 +1542,21 @@ private fun OrderDetailContent(order: BuyerOrderResponse, detailError: String?) 
             }
         }
         item {
-            InfoPanel(
-                title = "Schedule",
-                body = listOf(
-                    "Delivery date: ${OrderDisplayFormatters.orFallback(order.deliveryDate, "Not set")}",
-                    "Time slot: ${OrderDisplayFormatters.orFallback(order.timeSlot, "Not set")}",
-                    "Payment: ${OrderDisplayFormatters.orFallback(order.paymentMethod)}",
-                    "Total: ${OrderDisplayFormatters.formatOptionalPeso(order.totalAmount)}"
-                ).joinToString("\n")
-            )
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .background(SurfaceWarm, RoundedCornerShape(4.dp))
+                    .border(1.dp, Stone200, RoundedCornerShape(4.dp))
+                    .padding(18.dp)
+            ) {
+                Text("Schedule", style = MaterialTheme.typography.headlineSmall)
+                Spacer(Modifier.height(10.dp))
+                SummaryRow("Delivery Date", OrderDisplayFormatters.orFallback(order.deliveryDate, "Not set"))
+                SummaryRow("Time Slot", OrderDisplayFormatters.orFallback(order.timeSlot, "Not set"))
+                SummaryDivider()
+                SummaryRow("Payment", OrderDisplayFormatters.orFallback(order.paymentMethod))
+                SummaryRow("Total", OrderDisplayFormatters.formatOptionalPeso(order.totalAmount))
+            }
         }
         item {
             InfoPanel(
@@ -1559,15 +1591,21 @@ private fun OrderDetailContent(order: BuyerOrderResponse, detailError: String?) 
         }
         order.shipping?.let { shipping ->
             item {
-                InfoPanel(
-                    title = "Delivery Status",
-                    body = listOf(
-                        "Courier: ${OrderDisplayFormatters.orFallback(shipping.courierName)}",
-                        "Tracking: ${OrderDisplayFormatters.orFallback(shipping.trackingNumber)}",
-                        "Latest: ${OrderDisplayFormatters.orFallback(shipping.latestStatus, OrderDisplayFormatters.statusLabel(order.status))}",
-                        "Estimated: ${OrderDisplayFormatters.orFallback(shipping.estimatedDeliveryDate, "Not set")}"
-                    ).joinToString("\n")
-                )
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .background(SurfaceWarm, RoundedCornerShape(4.dp))
+                        .border(1.dp, Stone200, RoundedCornerShape(4.dp))
+                        .padding(18.dp)
+                ) {
+                    Text("Delivery Status", style = MaterialTheme.typography.headlineSmall)
+                    Spacer(Modifier.height(10.dp))
+                    SummaryRow("Courier", OrderDisplayFormatters.orFallback(shipping.courierName))
+                    SummaryRow("Tracking #", OrderDisplayFormatters.orFallback(shipping.trackingNumber))
+                    SummaryDivider()
+                    SummaryRow("Latest", OrderDisplayFormatters.orFallback(shipping.latestStatus, OrderDisplayFormatters.statusLabel(order.status)))
+                    SummaryRow("Estimated", OrderDisplayFormatters.orFallback(shipping.estimatedDeliveryDate, "Not set"))
+                }
             }
         }
         val proofImageUrl = order.proofImageUrl ?: order.shipping?.proofImageUrl
@@ -1606,9 +1644,19 @@ private fun OrderTrackingPanel(timeline: OrderTrackingTimelineState) {
             )
         }
         Spacer(Modifier.height(14.dp))
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            timeline.steps.forEach { step ->
+        Column {
+            timeline.steps.forEachIndexed { index, step ->
                 OrderTrackingStepRow(step)
+                // Vertical connector line between steps (not after the last step)
+                if (index < timeline.steps.lastIndex) {
+                    Box(
+                        modifier = Modifier
+                            .padding(start = 7.dp) // align under dot center (dot is 18dp wide, so 9dp center - 2dp/2 half-line = 8dp, padding of row is 12dp spacer)
+                            .width(2.dp)
+                            .height(14.dp)
+                            .background(Stone200)
+                    )
+                }
             }
         }
     }
